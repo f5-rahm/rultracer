@@ -1,0 +1,89 @@
+iRule Execution Tracing and Performance Profiling, Part 1
+F5 introduced Tcl-based iRules to its BIG-IP product offerings when TMOS was introduced, and it has been a great success ever since. BIG-IP users write iRule scripts to extend TMOS functionality for protocol parsing, traffic manipulation, statistics collection, and all sorts of other application delivery tasks. Millions of iRule scripts run around the clock and around the world for mission critical functions. There are several factors contributing to the success of iRules.
+
+First, iRules are integrated directly into the TMOS microkernel architecture. There is no separate process running a virtual machine on the sideline; instead a customized Tcl interpreter is fully integrated within the traffic management microkernel (TMM). All the traffic data processing, algorithm rolling, result caching and memory management are directly within the TMOS core. This design provides a high performance environment for iRule execution.
+
+Second, iRules are a genuine part of the BIG-IP solution. When the product development team takes on a new BIG-IP feature, be it a new software module or hardware acceleration, how iRules can best be used in the overall solution is one of the first and most important design considerations. This makes iRules integral throughout the vertical system stack and the horizontal feature offerings. Users can rely on a rich Tcl extension to quickly develop powerful applications.
+
+As of BIG-IP v13.1.0 release there are over 800 iRule commands covering more than 100 network applications.
+
+Third, there is a vibrant and resourceful iRules community. DevCentral provides a key platform for F5 and users to exchange experiences and ideas. This quick feedback loop gives the product development team great insights into trending use cases. This is great, definitely!
+
+Yet we know that iRules as a development environment is far from perfect. Specifically when the iRule infrastructure team surveys the users, we often get asked 2 questions:
+
+Is there a better way to debug iRules than inserting log commands?
+Can I get richer metrics on iRule performance?
+The problem
+Being able to scope iRules execution is a long sought after feature from users, F5 support and product development. Primarily the requests focus on 2 types of info:
+
+Data - How to gather the appropriate type and volume of data to analyze and make educated decisions about iRule behaviors.
+Performance - How to estimate what impact an iRule will have on the overall performance of the system, as well as that of individual commands.
+Data
+iRule users have historically used the crudest of debug facilities, the log command, to dump data to log files to trace iRule execution. Each time users insert a debug log, they need to reload the config, rerun their test traffic, consult the log file, consider what it shows, insert the further debug log statements and do it all over until they're content with the results. This is very time consuming. To make this problem worse, the BIG-IP logging facility can mangle the output, as when the debug log runs at high frequency the output can be truncated.
+
+Because of the problem, users have been asking for a new iRules specific debug facility so that they can conveniently inspect the following data:
+
+Execution trace
+iRules are an event driven programming paradigm, and this is naturally reflective of the patterns of network traffic and the hierarchy of protocols. Yet there are some challenges when you need to debug an iRule with multiple events. When things go wrong, it is critical to know exactly in what sequence the events are fired; in the same token, when debugging a complex script, having a crystal clear command execution trace saves a lot of frustration.
+
+Watching Variables
+As a software engineer, we all know the importance of being able to watch variable values at run time, as it is intrinsic to the debug-ability of a development environment. Variables in iRules are connection scoped, so the same variable can be updated in different events. Because of the asynchronous nature of iRule events, being able to monitor variable updates is crucial to solving iRule bugs.
+
+Procedure tracing
+The iRules proc command provides a polymorphism language feature, and very often at run time the proc callee gets finalized when there are multiple procs with the same name. Again, because of the event driven programming model, figuring out which proc is called and when is critical to iRules debugging.
+Performance
+While iRules timing stats provide such performance metrics as minimum, maximum and average execution time at the script level, they are too coarse to provide much architectural level insight. When a user suspects an iRule script has performance issues, normally that user needs to rely on past experience to guess the bottleneck. There is no data to guide users to locate the critical path. In other words, when an iRule is suspected of "running slow", is it really something that users can improve? If so, what is the margin? Specifically there are several aspects:
+
+iRules are an open ended portal to expand BIG-IP functionality. So far the focus has generally been around its feature set.
+iRules are intrinsic to many system solutions, as there is no standalone system implementation available which compares well with iRule solutions.
+iRules provide Tcl VM integration alongside the real time traffic processing and flow management TMM functionalities. "iRule performance" is vague by itself, and a finer differentiation between Tcl interpretation and featured function execution is required to properly understand iRule performance.
+Because of these issues, iRule performance tuning has been constrained with personal expertise rather than systematic solutions. Users painstakingly fix all the bugs in their script, traffic management executes correctly but not as fast as they expected, and it normally entails a trial and error journey to tune up the performance.
+
+Specifically the following insight will greatly help understand the performance bottleneck:
+
+TMM overhead
+BIG-IP users can get pretty good timing stats on packet processing latency but iRules sit at the core data path. How much time was spent on executing the iRule vs the overral TMM processing? This is the first breakdown we want to achieve. In other words, from the perspective of the iRules, the time before the iRules are invoked and after the iRules complete is overhead. What is the ratio between the time of the iRules and the corresponding TMM overhead?
+
+Event
+Events are the basic unit of an iRule script. The execution time between the start and finish of each event captures the particular event handling performance.
+
+Command
+Commands are the basic level of Tcl programming, and include the core Tcl commands as well as BIG-IP extension commands. Some extension commands are implemented as blocking features such as table command and after command. Even proc is a command, as this conforms to the Tcl convention.
+
+Tcl Virtual Machine
+iRules employ a Tcl virtual machine as its core data path. This machine is fairly transparent to iRule developers. Yet there are die-hard Tclers that like to tinker with every single bit of the language and enjoy squeezing ever more performance from it (no kidding, check this out, these folks hold iRules close to the heart), and there is no reason we do not facilitate this endeavor.
+So we understand the problem, and we would love to solve it because the same problems bother us (maybe even more so because we are honestly stunned time and again by multi-thousand line iRules that are escalated to us where the case's subject indicates that it's an important situation, they need help with the iRules, and it is urgent. Ugrrr).
+
+The Model
+Yes, I know you are itching to learn how we will address this. But before that, we need to have a common ground to set up a description of the solution.
+
+0151T000003d776QAA.png
+
+Figure 1 iRule execution model
+
+Figure 1, iRule execution model, illustrates an iRule execution from the perspective of its timing breakdown. Note that it is a timing breakdown, not necessarily the exact sequencing. Let us walk through the diagram.
+
+You can see that along the execution there are various named points. These are the junctures between 2 execution phases.  Let us call them "occurrances". We will run into this term again because it is part of the naming convention.
+
+To help illustrate the diagram, let us use the following simple iRule as an example:
+
+when HTTP_REQUEST {
+  log local0. "It is from [HTTP::host]"
+}
+List 1
+Givin the diagram and the simple iRule above, let's work through the flow.
+
+After TMM finishes the initial packet processing and it comes to "iRules land" by firing an iRule event, "Event Entry" is the occurrance for the iRule land. In List 1's example, the execution starts at "when HTTP_REQUEST".
+Because there could be multiple scripts with same event (i.e. there is another HTTP_REQUEST script) locating the right script takes some time. After that, the execution comes to the rule script, "Rule Entry", in the diagram. Figuratively we can think of that "{" in list 1. This is the second occurrance.
+Now it is ready to execute the Tcl code so the execution comes to Tcl VM at "Rule VM Entry".
+We all know Tcl scripts are compiled to byte code before the execution. The Tcl virtual machine executes one bytecode instruction at a time and so "Bytecode" is the fourth occurrance.
+When a bytecode is "invoke", the VM calls the native implementation of the command. This fifth occurrance is "VM Entry".
+In List 1's example, the invoked command is log or HTTP::host. Both these commands are extention commands (provided by the TMM and not part of the core Tcl runtime) and so the execution leaves the Tcl virtual machine which is the "Command Entry" occurrance.
+OK, by this point, we have walked through all the timing hierarchies, from top to bottom.
+Execution continues and the following occurrances walk the hierarchy upwards: "Command Exit", "VM Exit", "Rule VM Exit", "Rule Exit" and "Event Exit".
+In order to preserve the clarity of the diagram, these occurrances are not labled, hopefully it is straightforward to locate them. Note that with the exception of  "Bytecode", all occurrances come in pairs. Also note that the last occurrance (as with those exit ones) not shown in the diagram, is "Variable Modification". It is when a Tcl variable changes value.
+
+What's to Come
+At this point we know what timing metrics are needed in order to tune up iRule performance. In the next article we will present the new iRules features we introduced in the BIG-IP V13.1 release. We will take real examples to trace execution and digest timing data. Be prepared for a deep dive.
+
+Authors: Jibin Han, Bonny Rais

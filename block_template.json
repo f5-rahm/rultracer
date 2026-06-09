@@ -1,0 +1,18 @@
+{
+  "name": "rultracer",
+  "description": "rultracer — visual debugger and profiler for iRules built on ltm rule-profiler",
+  "inputProperties": [],
+  "outputProperties": [
+    {
+      "id": "installedVersion",
+      "type": "STRING",
+      "displayName": "Extension version"
+    }
+  ],
+  "configProcessorReference": {
+    "link": "https://localhost/mgmt/shared/iapp/processors/rultracer"
+  },
+  "presentationHtmlReference": {
+    "link": "https://localhost/iapps/rultracer/presentation/index.html"
+  }
+}

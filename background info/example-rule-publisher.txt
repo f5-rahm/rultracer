@@ -1,0 +1,5 @@
+sys log-config publisher rule_profiling_pub {
+    destinations {
+        local-syslog { }
+    }
+}

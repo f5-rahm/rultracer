@@ -1,0 +1,16 @@
+# Build artifacts (RPM build cache + output)
+build/.rpmbuild/
+build/dist/
+
+# macOS metadata
+.DS_Store
+
+# Editor noise
+.idea/
+.vscode/
+*.swp
+*~
+
+# Runtime / local-only directories (the worker creates these on-box, not locally)
+data/
+node_modules/

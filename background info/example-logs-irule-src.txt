@@ -1,0 +1,11 @@
+when CLIENT_ACCEPTED {
+    set cip [IP::client_addr]
+}
+when HTTP_REQUEST {
+    if { ${cip} == "10.1.1.6" } {
+        log local0. "Client ${cip} access granted"
+        return
+    } else {
+        HTTP::respond 200 content "Hey there ${cip}...you don't belong here"
+    }
+}

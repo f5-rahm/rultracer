@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rultracer</title>
+  <!-- Anchor all relative asset URLs under the UiWorker base, regardless of trailing slash. -->
+  <base href="/mgmt/shared/rultracer/ui/">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">rultracer<span class="sub">iRule debugger</span></div>
+    <nav class="tabs">
+      <button class="tab" data-view="setup">Setup</button>
+      <button class="tab" data-view="capture">Capture</button>
+      <button class="tab" data-view="sessions">Sessions</button>
+    </nav>
+    <div id="engine-state" class="engine-state" title="capture engine state">idle</div>
+  </header>
+
+  <main id="app">
+    <!-- SETUP -->
+    <section class="view" data-view="setup">
+      <h2>Configure a capture</h2>
+      <p class="warn">rule-profiler adds TMM overhead &mdash; use on a lab device only.</p>
+
+      <div class="field">
+        <label for="vs">Virtual server</label>
+        <select id="vs"></select>
+      </div>
+
+      <div class="field">
+        <label>iRules on this virtual</label>
+        <div id="rules" class="checks"></div>
+        <small>Leave all unchecked to trace every rule on the virtual.</small>
+      </div>
+
+      <div class="field">
+        <label>
+          Events
+          <span class="bulk-actions">
+            <button type="button" id="ev-all" class="link-btn">select all</button>
+            <span class="sep">|</span>
+            <button type="button" id="ev-none" class="link-btn">deselect all</button>
+          </span>
+        </label>
+        <div id="events" class="checks"></div>
+        <small id="events-hint">Check at least one rule above to see its events.</small>
+      </div>
+
+      <div class="field">
+        <label>
+          Occurrence types <em>(explicit &mdash; nothing is selected by default)</em>
+          <span class="bulk-actions">
+            <button type="button" id="occ-all" class="link-btn">select all</button>
+            <span class="sep">|</span>
+            <button type="button" id="occ-none" class="link-btn">deselect all</button>
+          </span>
+        </label>
+        <div id="occmask" class="checks"></div>
+        <small class="hint" id="bytecode-hint"></small>
+      </div>
+
+      <div class="field">
+        <label>Capture period</label>
+        <div class="period">
+          <div id="period-presets" class="presets"></div>
+          <input type="number" id="period" min="0" step="100" value="5000"> ms
+        </div>
+      </div>
+
+      <div class="field inline">
+        <label>Stop mode</label>
+        <label class="radio"><input type="radio" name="stopMode" value="manual" checked> Manual (I will click Stop)</label>
+        <label class="radio"><input type="radio" name="stopMode" value="period"> Auto-stop at period</label>
+      </div>
+
+      <div class="field inline">
+        <label>Log publisher</label>
+        <label class="radio"><input type="radio" name="pubMode" value="reuse" checked> Use existing</label>
+        <label class="radio"><input type="radio" name="pubMode" value="create"> Use/create rultracer_pub</label>
+      </div>
+      <div class="field" id="pub-select-field" hidden>
+        <label for="pub-select">Publisher</label>
+        <select id="pub-select"></select>
+        <small>Showing publishers that route to local-syslog (so rule-profiler output lands in /var/log/ltm).</small>
+      </div>
+
+      <div class="field">
+        <label for="capname">Session name (optional)</label>
+        <input type="text" id="capname" placeholder="e.g. login flow repro">
+      </div>
+
+      <div class="actions">
+        <button id="start-btn" class="primary">Start capture</button>
+      </div>
+      <div id="setup-msg" class="msg"></div>
+    </section>
+
+    <!-- CAPTURE -->
+    <section class="view" data-view="capture" hidden>
+      <h2>Capture in progress</h2>
+      <div class="status-card">
+        <div>State: <strong id="cap-state">&mdash;</strong></div>
+        <div>Session: <span id="cap-session">&mdash;</span></div>
+        <div>Virtual: <span id="cap-vs">&mdash;</span></div>
+        <div id="cap-timer-cell"><span id="cap-timer-label">Timer:</span> <strong id="cap-timer">&mdash;</strong></div>
+      </div>
+
+      <p class="muted">rule-profiler only emits while matching traffic flows. Drive traffic from an external
+        source (curl, replayer, real client) <em>after</em> the state shows <strong>capturing</strong>,
+        then click Stop once it completes — or let the period timer auto-stop the capture.</p>
+
+      <div class="field inline">
+        <label class="cb"><input id="traffic-enable" type="checkbox"> Generate traffic from this page (simple HTTP sender)</label>
+      </div>
+
+      <div id="traffic-form" hidden>
+        <div class="traffic-grid">
+          <label>VIP address <input id="t-host" placeholder="10.1.10.50"></label>
+          <label>Port <input id="t-port" type="number" value="80"></label>
+          <label>Path <input id="t-path" value="/"></label>
+          <label>Method
+            <select id="t-method">
+              <option>GET</option>
+              <option>POST</option>
+              <option>PUT</option>
+              <option>PATCH</option>
+              <option>DELETE</option>
+              <option>HEAD</option>
+            </select>
+          </label>
+          <label>Host header <input id="t-hosthdr" placeholder="example.com"></label>
+          <label>Count <input id="t-count" type="number" value="5" min="1" max="100"></label>
+          <label class="cb"><input id="t-https" type="checkbox"> HTTPS</label>
+        </div>
+        <div class="field" id="t-body-field" hidden>
+          <label for="t-body">Request body</label>
+          <textarea id="t-body" rows="5" placeholder="POST/PUT/PATCH body (raw text)"></textarea>
+          <label class="cb-inline"><input id="t-body-json" type="checkbox"> Send as application/json</label>
+        </div>
+        <div class="actions"><button id="send-btn">Send traffic</button></div>
+      </div>
+
+      <div class="actions">
+        <button id="stop-btn" class="primary">Stop capture</button>
+      </div>
+      <div id="capture-msg" class="msg"></div>
+    </section>
+
+    <!-- SESSIONS -->
+    <section class="view" data-view="sessions" hidden>
+      <h2>Sessions</h2>
+      <p class="muted">Sessions live under <code>/shared/rultracer/data</code> and persist across
+        installs/upgrades. Use <em>Download backup</em> to move sessions to another BIG-IP, archive
+        them, or before a <code>--reinstall</code>.</p>
+      <div class="actions">
+        <button id="refresh-sessions">Refresh</button>
+        <button id="export-sessions">Download backup</button>
+        <button id="import-sessions">Restore from backup</button>
+        <input type="file" id="import-file" accept=".json" hidden>
+      </div>
+      <div id="sessions-msg" class="msg"></div>
+      <table class="sessions">
+        <thead><tr><th>Name</th><th>Created</th><th>VS</th><th>Status</th><th>Lines</th><th></th></tr></thead>
+        <tbody id="sessions-body"></tbody>
+      </table>
+      <div id="session-detail" class="detail" hidden></div>
+    </section>
+  </main>
+
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

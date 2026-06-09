@@ -1,0 +1,102 @@
+iRule Execution Tracing and Performance Profiling, Part 2
+In the last article we discussed some intriguing questions around iRules tracing and profiling. There are a lot we can do to facilitate iRules debugging and performance tuning, and we took the first step in BIG-IP v13.1. We are pleased to announce that iRules tracing and profiling feature is added to TMOS tool chain in this release. This feature enables both users and iRules infrastructure development team to broaden iRules functionality and application prospects. In this article we will describe the focal use cases and design principles of the feature; we will use examples to demonstrate how to use the feature.
+
+Use case and consideration
+Following are the major use model we target and the design principles we employ for the feature in this release:
+
+This feature is mostly used in debug environment. Execution tracing and performance tuning are part of development process. We envision that the most typical use case is users take to the tracing functionality when scripts are still in development. It is possible that the iRules are running on production systems, yet when users like to inspect performance issues, they take the scripts to lab environment to collect performance data, analyze bottleneck and experiment algorithm tuning.
+The solution needs to be non-intrusive. Tcl language has tracing constructs in its core infrastructure, for example trace command is a Tcl core command. Historically trace command is not supported by iRules. Although it is a viable option to reuse Tcl's trace command as the basic facility for the tracing feature, we make the choice that the feature does not require users to modify the script; instead, it is a passive observation solution: users configure the conditions and leave the script intact. This provides a smooth debugging experience: users can enable the feature, observe the result and adjust the feature configuration continuously.
+Graphical interface is not critical in the first release. Ideally the feature is presented in a GUI environment. We believe a command line interaction in the first release properly addresses the most critical use cases.
+Separate data collecting and data scoping. Tracing comes with high volume data, the deeper and wider the tracing goes, the more data are generated. In this release we focus on picking the right data (the "occurrences" presented in the last article) and delivering the data timely and securely. Providing tool chain to help users to mine the data is a logical next step.
+The Feature
+OK, now we are ready to present the feature. The audience of this article are familiar with BIG-IP and iRules, so let's have fun and jump to some examples.
+
+Example
+Here is a simple iRules script:
+
+ltm rule dc_1 {
+  when CLIENT_ACCEPTED {
+    if {[IP::remote_addr] eq "10.10.10.2"} {
+      set the_one true
+    } else {
+      set the_one false
+    }
+  }
+  when HTTP_REQUEST {
+    if {$the_one} {
+      HTTP::uri [string map {myPortal UserPortal} [HTTP::uri]]
+    }
+  }
+}
+Now issue the following TMSH commands to insert the tracer:
+
+tmsh create ltm rule-profiler dc_1_tracer event-filter add { CLIENT_ACCEPTED HTTP_REQUEST } vs-filter add { /Common/vs1 } publisher tracer_pub1
+tmsh modify ltm rule-profiler dc_1_tracer occ-mask { cmd cmd-vm event rule rule-vm var-mod }
+tmsh modify ltm rule-profiler dc_1_tracer state enabled
+
+The feature introduces a new TMSH configuration object, rule-profiler. There can be multiple rule-profiler objects, this facilitates difference tracing scenarios. Following attributes of rule-profiler are configured in the above TMSH commands:
+
+event-filter, the iRule events to trace; if not defined, all events are traced.
+vs-filter, the virtual servers to trace; if not defined, all virtual servers are traced.
+occ-mask, the occurrences to trace. The viable values are as explained in the last article.
+publisher, the syslog publisher to receive the tracing log.
+The user needs to enable the rule-profiler object after the configuration. Now the tracing facility is ready. We start the tracing on a running traffic by the following command:
+
+tmsh start ltm rule-profiler dc_1_tracer
+The lab setup for this example has publisher point to the local syslog and here is a partial capture of the output in /var/log/ltm (the color coding is for this article to describe the data):
+
+1511494952932589,RP_EVENT_ENTRY,/Common/vs1,CLIENT_ACCEPTED,18291,0x94558076344064,10.10.10.2,46052,0,10.10.10.160,80,
+01511494952932622,RP_RULE_ENTRY,/Common/vs1,/Common/dc_1,18291,0x94558076344064,10.10.10.2,46052,0,10.10.10.160,80,0
+1511494952932625,RP_RULE_VM_ENTRY,/Common/vs1,/Common/dc_1,18291,0x94558076344064,10.10.10.2,46052,0,10.10.10.160,80,0
+1511494952932628,RP_CMD_VM_ENTRY,/Common/vs1,IP::remote_addr,18291,0x94558076344064,10.10.10.2,46052,0,10.10.10.160,80,0
+1511494952932630,RP_CMD_ENTRY,/Common/vs1,IP::remote_addr,18291,0x94558076344064,10.10.10.2,46052,0,10.10.10.160,80,0
+1511494952932633,RP_CMD_EXIT,/Common/vs1,IP::remote_addr,18291,0x94558076344064,10.10.10.2,46052,0,10.10.10.160,80,0
+1511494952932636,RP_CMD_VM_EXIT,/Common/vs1,IP::remote_addr,18291,0x94558076344064,10.10.10.2,46052,0,10.10.10.160,80,
+01511494952932638,RP_VAR_MOD,/Common/vs1,the_one=true,18291,0x94558076344064,10.10.10.2,46052,0,10.10.10.160,80
+Now let us take a close look at the logs.
+
+Occurrence fields
+Each tracing occurrence, as defined by "occ-mask" attribute, dumps one line to the log file; there are 7 fields within each line:
+
+Timestamp - This is the TMM time stamp at the occurrence. The unit is micro second.
+Occurrence type - This is the type of the occurrence. It is corresponding to "occ-mask" attribute definition. The meaning of each occurrence is defined in the last article. "RP" stands for "Rule Profiler".
+Virtual server - This is the name of the virtual server on which the iRules are running.
+Occurrence value - This is the value of the corresponding occurrence. For example, the first log in the above snippet is at the entry occurrence of iRule event CLIENT_ACCEPTED.
+Process ID - This is the TMM process ID.
+Flow ID - This is the flow ID.
+Remote tuple - There are 3 fields, IP address, port and routing domain.
+Local tuple - There are 3 fields, IP address, port and routing domain.
+Stop Tracing
+User can stop the tracing by issuing this TMSH command:
+
+tmsh stop ltm rule-profiler <rule-profiler name>
+Tracer has a built-in timer, it stops tracing after 10 milliseconds. User can adjust it through the following command:
+
+tmsh modify ltm rule-profiler dc_1_tracer period <new value in ms>
+Bytecode
+As mentioned in the first article, the tracing feature supports bytecode tracing. Using the example above, add "bytecode" to "occ-mask":
+
+tmsh modify ltm rule-profiler dc_1_tracer occ-mask { bytecode cmd cmd-vm event rule rule-vm var-mod }
+With this addition, you will see the bytecode execution. But keep one thing in mind, you will see a lot more logging.
+
+1511673715911247,RP_EVENT_ENTRY,/Common/vs1,CLIENT_ACCEPTED,18291,0x94558076344064,10.10.10.2,41772,0,10.10.10.160,80,0,
+1511673715911273,RP_RULE_ENTRY,/Common/vs1,/Common/dc_1,18291,0x94558076344064,10.10.10.2,41772,0,10.10.10.160,80,0,2
+1511673715911277,RP_RULE_VM_ENTRY,/Common/vs1,/Common/dc_1,18291,0x94558076344064,10.10.10.2,41772,0,10.10.10.160,80,0,2
+1511673715911280,RP_CMD_BYTECODE,/Common/vs1,push1,18291,0x94558076344064,10.10.10.2,41772,0,10.10.10.160,80,0,2
+1511673715911282,RP_CMD_BYTECODE,/Common/vs1,invokeStk1,18291,0x94558076344064,10.10.10.2,41772,0,10.10.10.160,80,0,2
+1511673715911284,RP_CMD_VM_ENTRY,/Common/vs1,IP::remote_addr,18291,0x94558076344064,10.10.10.2,41772,0,10.10.10.160,80,0,2
+1511673715911286,RP_CMD_ENTRY,/Common/vs1,IP::remote_addr,18291,0x94558076344064,10.10.10.2,41772,0,10.10.10.160,80,0,2
+1511673715911288,RP_CMD_EXIT,/Common/vs1,IP::remote_addr,18291,0x94558076344064,10.10.10.2,41772,0,10.10.10.160,80,0,0
+1511673715911291,RP_CMD_VM_EXIT,/Common/vs1,IP::remote_addr,18291,0x94558076344064,10.10.10.2,41772,0,10.10.10.160,80,0,0
+1511673715911293,RP_CMD_BYTECODE,/Common/vs1,push1,18291,0x94558076344064,10.10.10.2,41772,0,10.10.10.160,80,0,2
+1511673715911295,RP_CMD_BYTECODE,/Common/vs1,streq,18291,0x94558076344064,10.10.10.2,41772,0,10.10.10.160,80,0,2
+1511673715911296,RP_CMD_BYTECODE,/Common/vs1,push1,18291,0x94558076344064,10.10.10.2,41772,0,10.10.10.160,80,0,2
+1511673715911298,RP_CMD_BYTECODE,/Common/vs1,push1,18291,0x94558076344064,10.10.10.2,41772,0,10.10.10.160,80,0,2
+1511673715911300,RP_CMD_BYTECODE,/Common/vs1,storeScalarStk,18291,0x94558076344064,10.10.10.2,41772,0,10.10.10.160,80,0,2
+1511673715911302,RP_VAR_MOD,/Common/vs1,the_one=true,18291,0x94558076344064,10.10.10.2,41772,0,10.10.10.160,80,0
+
+
+What's to come
+This article describes the TMSH commands to configure rule-profiler and how to interpret the tracing logs. Next article will talk about tips and tricks of using the tracing feature.
+
+Authors: Jibin Han,  Bonny Rais

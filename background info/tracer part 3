@@ -1,0 +1,50 @@
+iRule Execution Tracing and Performance Profiling, Part 3
+We introduced the iRule tracing and profiling feature in the last article. The feature is already release to some early iRules users and we received great feedback. This article answers the frequently asked questions and offers some best practice suggestions.
+
+How do I correlate the occurrences to iRules already existed timing data?
+
+Currently there are three timing statistic data for iRule execution: maximum, minimum and average CPU cycles. These data measure the time between the entry and the exit of an iRule execution, so it is the same span between the time stamps of RP_RULE_ENTRY and RP_RULE_EXIT. The difference is the unit of occurrence time stamps is microsecond, not CPU cycle.
+
+Note that an iRule script is compiled to byte code at its first execution, this compile time is included in RULE and RULE_VM time spans. This accounting is same as iRules timing data; the difference is the timing data amortize the compile time over all the executions.
+
+Why do I see some delay between starting tracing and logging show up?
+
+In order to minimize the disruption from the tracing feature to iRules executions, we do not send the occurrence data to the logging publisher immediately; instead the data are buffered in memory until the buffer is full and sent to the logging publisher only at that time.
+
+On two occasions we log out the data in buffer before it is full:
+
+The tracing timer expires.
+User issues the stop tracing command.
+It is always good to issue the stop command at the end of one debug session.
+
+Why don't I see some common Tcl commands in the log?
+
+The Tcl interpreter compiles the script to byte code before the first execution and some Tcl commands are replaced by the byte codes. This is the reason users do not see occurrences for such commands as set, append, etc.
+
+What is the best value for tracing period?
+
+This is system and environment dependent.
+
+The purpose we introduce the tracing period configuration is for security consideration. Tracing and logging take system resources; especially the logging consumes CPU cycles and I/O bandwidth. When tracing iRules on a high throughput traffic with many occurrences configured, system performance will be impacted.
+
+It is best to use the feature in a lab environment and find the tracing period just long enough for the iRules.
+
+Why do I see multiple executions of one command?
+
+iRules adopts a suspension and resume technology to provide a high performance traffic processing solution. The commands implementing this technology can get called multiple times. For example, table lookup command may get suspended in its first execution; later on when the lookup result is available, the command runs again. At the tracing log, users can see multiple entries and exists of the table command.
+
+Any thing special for multi TMM system?
+
+iRules are scoped to individual TMM, so is the tracing feature. The tracing configuration does not allow picking TMM, so, for example, when it is configured to trace an iRule command, then the executions of that command on all TMM are traced.
+
+Upon receiving the tracing start command, an alert message is sent to the log publisher. Users may see multiple such alerts in the log, that is because there are multiple running TMM.
+
+What's to come?
+
+This the end of the introduction of the iRules tracing feature. Please try it out once you install BIG-IP v13.1 and reach us with your experiences.
+
+Your feedback is the ultimate driver of what is to come.
+
+Cheers!
+
+Authors: Jibin Han, Bonny Rais

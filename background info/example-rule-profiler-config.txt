@@ -1,0 +1,8 @@
+# Create a rule-profiler
+tmsh create ltm rule-profiler rt1 event-filter add { CLIENT_ACCEPTED HTTP_REQUEST } vs-filter add { /Common/testvip-http } publisher rule_profiling_pub
+tmsh modify ltm rule-profiler rt1 occ-mask { cmd cmd-vm event rule rule-vm var-mod bytecode }
+tmsh modify ltm rule-profiler rt1 state enabled
+
+# Start / Stop the profiler for testing
+tmsh start ltm rule-profiler rt1
+tmsh stop ltm rule-profiler rt1
