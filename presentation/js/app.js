@@ -386,6 +386,15 @@
         tr.appendChild(el('td', { html: '<span class="badge ' + (s.status || '') + '">' + (s.status || '') + '</span>' }));
         tr.appendChild(el('td', { text: String(cap.lineCount != null ? cap.lineCount : '') }));
         var actions = el('td');
+        var analyze = el('span', { class: 'link', text: 'analyze' });
+        analyze.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          API.getRaw(s.id).then(function (res) {
+            window.Analysis.loadRaw(res.raw || '', { rules: (s.config && s.config.rules) || [] });
+          }).catch(function (e) { window.alert('Could not load raw: ' + e.message); });
+        });
+        actions.appendChild(analyze);
+        actions.appendChild(document.createTextNode(' · '));
         var del = el('span', { class: 'link', text: 'delete' });
         del.addEventListener('click', function (ev) { ev.stopPropagation(); deleteSession(s.id); });
         actions.appendChild(del);
@@ -509,6 +518,7 @@
     $('import-sessions').addEventListener('click', chooseImportFile);
     $('import-file').addEventListener('change', onImportFile);
     renderPeriodPresets();
+    if (window.Analysis) { window.Analysis.init(); }
     loadInventory();
     showView('setup');
     pollStatus();

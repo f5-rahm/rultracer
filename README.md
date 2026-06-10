@@ -10,7 +10,11 @@ report). See [PLAN.md](PLAN.md) for the full design and phased plan.
 
 ## Status
 
-Phase 1 (capture core): profiler setup + bounded capture + session persistence + teardown.
+- **Phase 1** (capture core): profiler setup + bounded capture + session persistence + teardown.
+- **Phase 2** (v0.2.0 — analysis): browser-side trace parser, TMM ↔ TCL VM sequence
+  diagram, linked step-through (table + scrubber + variable/command replay), and
+  best-effort iRule source mapping. Open a finalized session from **Sessions →
+  analyze**, or use **Analysis → Load bundled example / paste** to work offline.
 
 ## Layout
 
@@ -20,7 +24,7 @@ nodejs/               on-box workers (run in restnoded, Node 6.9.1 -> ES5)
   lib/                shared helpers + RestWorkers
 presentation/         browser SPA (vanilla JS, no build step)
 build/                RPM build + install scripts
-test/                 zero-dependency test harness (node test/unit.js)
+test/                 zero-dependency test harness (node test/unit.js + test/phase2.js)
 docs/                 design docs and on-box runbooks
 background info/       source articles, man page, example captures (parser fixtures)
 ```

@@ -109,11 +109,14 @@ RPM via `build/build-rpm.sh` (dynamic `.spec`, noarch; `%files` = `nodejs/`, `pr
 ## Phased plan
 
 - **Phase 1 — Capture core (v1, goals 1–2).** Helper libs (`tmsh`,`iremote`,`logchain`,`capture`,`store`); InventoryWorker; ProfilerWorker state machine (path A + flush detection + guaranteed teardown); SessionWorker + retention; TrafficWorker; Setup/Capture/Sessions SPA views; RPM build + install/uninstall. **Deliverable:** configure profiler → bounded capture → `raw.csv` + manifest → clean teardown.
-- **Phase 2 — Parse + sequence + step-through (v1, goals 3,4,6).** `parser.js`/`model.js` (prefix-strip, pairing, durations, NestNode — single-TMM, flow/event grouping); `seqdiagram.js` D3 diagram with crossings; `stepthrough.js` linked table+scrubber w/ variable/command replay; `sourcemap.js` best-effort annotation; grouping selector. **Deliverable:** full v1 usable debugger.
+- **Phase 2 — Parse + sequence + step-through (v1, goals 3,4,6). ✅ DELIVERED v0.2.0 (tag `phase2`).** `parser.js`/`model.js` (prefix-strip, pairing, durations, NestNode — single-TMM, flow/event grouping); `seqdiagram.js` sequence diagram with crossings; `stepthrough.js` linked table+scrubber w/ variable/command replay; `sourcemap.js` best-effort annotation; grouping selector. **Deliverable:** full v1 usable debugger. *See "Phase 2 delivery & lessons" at the end of this doc for what shipped, addendums (custom SVG instead of D3, call-order lifelines, timing modes, source-coverage rework, modal loader, SVG/PNG export), and lessons learned.*
 - **Phase 3 — Flamegraph + diff (goal 5).** NestNode→folded → vendored d3-flame-graph; diff view comparing two captures. Seam: `toFolded()`.
 - **Phase 4 — Cycles-vs-CPU stats (goal 7).** Durations are µs deltas (no cycle field on 17.1 VE); convert µs→cycles via `/mgmt/tm/sys` CPU clock/core count and reconcile with `ltm rule stats`. Seam: InventoryWorker CPU stub.
 - **Phase 5 — Reports + Mermaid export (goal 8).** Self-contained HTML + JSON/folded/CSV; wire `toMermaid()` to download. Seam: serializable model, disabled Mermaid button present.
 - **Phase 6 — Multi-TMM & trace layering (deferred from goal-7/viz; needs multi-TMM hardware).** Partition by TMM, single-TMM/interleaved/overlay views, `layers([...])`; confirm the per-TMM line tagging and `ctxId` meaning on real hardware.
+- **Phase 7 — Wrap-up / polish (optional, end of project).** Small quality-of-life adds deferred to keep earlier phases clean:
+  - **Inline bytecode opcode hints** — hover tooltip (and/or opt-in verbose label) on each bytecode tick mapping the mnemonic to its meaning (`push1` → "push a literal", etc.), reusing the opcode table already in the collapsed "Bytecode reference" panel. Kept off-screen for now by request; promote to inline if desired.
+  - Other deferred polish as it accrues.
 
 Seams to leave from the start: generic NestNode/folded generation; keep parsing TMM-agnostic so a TMM partition can wrap it later; stub CPU inventory, Mermaid export, and flamegraph tab so later phases are additive, not refactors.
 
@@ -188,3 +191,31 @@ Reusable references: rulbased's worker-discovery, tmsh-via-bash, version-store, 
 - **Distribution** → f5devcentral, Apache-2.0.
 - **Retention** → Count (~20) + size (~500 MB) cap, adjustable.
 - **Name** → rultracer.
+
+---
+
+## Phase 2 delivery & lessons (v0.2.0, tag `phase2`)
+
+### Delivered (goals 3, 4, 6)
+- **Parser** (`presentation/js/parser.js`) — strips the syslog prefix (`tmm\d*\[\d+\]:`), splits the 12-field CSV, classifies each occurrence (base / kind / domain / lifeline). Handles **both** prefixed input (fixture, `/var/log/ltm` paste) and the prefix-stripped lines `capture.js` writes to `raw.csv`. `tsMicros` fits in `Number` (no BigInt).
+- **Model** (`model.js`) — per-`flowId` LIFO pairing → spans with `raw` / `sumChildren` / `realExecTime` (self time); NestNode forest; bytecode-run collapsing; flow/event indices. Flags `unmatched` spans and tolerates `CMD_VM` with no nested `CMD`.
+- **Sequence diagram** (`seqdiagram.js`) — custom SVG. Lifelines in **call order** `Users·Event·Rule·RuleVM·CommandVM·Command` (every arrow a short adjacent step), stark **TMM (teal) / TCL-VM (orange)** contrast, violet TMM↔VM **handoff** arrows. Collapsible bytecodes, even-step ↔ "scale to time" toggle, **Timing** modes (Δ labels / hop brackets, total raw µs), drag-pan + zoom, **responsive** (re-renders to pane width), **SVG/PNG export** (diagram CSS embedded in the SVG so exports are self-contained).
+- **Step-through** (`stepthrough.js`) — linked table + scrubber; replays `VAR_MOD` to show variable state + last command at the cursor. Dropped the redundant `lifeline` column; `Self (µs)` with tooltip.
+- **Source coverage** (`sourcemap.js`) — per-(rule, event, command) stats `{count, totalRaw, totalSelf}`; green = fired (badged `µs·N×`), dimmed = command token present but not observed (branch not taken), yellow = ambiguous. Collapsible cards labelled with the rule name; legend; auto-annotate (live, debounced); cross-highlight with diagram/step.
+- **Orchestration** (`analysis.js`) — flow/event grouping, trace dropdown, modal **Load trace** dialog (paste / bundled example / file: raw `.csv/.txt` or a `rultracer-sessions-*.json` backup → pick a session), Mermaid/SVG/PNG export, single-path cross-highlight.
+- **Plumbing** — full-width Analysis view (cap moved off `main` to the form views); `.txt` MIME in `UiWorker`; bundled `presentation/fixtures/`; collapsed **Bytecode reference** panel (opcode table + the "compiled-to-bytecode" explanation + links to the Part 3 and Tcl-disassembler community articles). Version `0.2.0`; `test/phase2.js` zero-dep browser-logic harness.
+
+### Addendums / deviations from the original plan
+- **No D3 in Phase 2.** The diagram is hand-rolled SVG; the only D3 needs were scales/zoom which were trivial to hand-roll. **D3 + d3-flame-graph are introduced in Phase 3** where genuinely required.
+- **Lifelines reordered to call order, no fixed TMM|VM gutter.** Original sketch grouped TMM left / VM right with a gutter; call-order + colour contrast reads better and keeps every arrow adjacent.
+- **Source "map" became source "coverage"** with per-line timing, branch-taken dimming, and cross-highlight — richer than the planned best-effort annotation.
+
+### Lessons learned
+- **No JS runtime on the dev Mac.** Node lives only on-box. Validate pure/browser logic headless via **`osascript -l JavaScript`** (JavaScriptCore, ES6) with stubbed `window`/`document`, plus a Python cross-check for algorithms. Keep clientside code Node-6.9.1-safe (no optional chaining / nullish coalescing) so `test/phase2.js` also runs on-box.
+- **Headless can't catch visual/interaction bugs.** The modal-stuck-open bug (`.modal{display:flex}` author rule overriding the UA `[hidden]{display:none}`, fixed with `.modal[hidden]{display:none}`) only showed in a real browser. Every visual change needs on-box eyes; budget a deploy+hard-refresh round-trip per iteration.
+- **Embed diagram CSS inside the SVG** (`<style>` element) → single source of truth *and* self-contained SVG/PNG export for free.
+- **Real captures are messy:** multi-flow, flush-window-truncated/unmatched spans, and `CMD_VM` with no nested `CMD`. The model must flag-and-continue, never assume clean nesting.
+- **Source-map double-count:** every native command emits both `CMD_VM` and `CMD`; count by `CMD_VM` (canonical) to avoid 2×.
+- **rule-profiler bytecode emits only the opcode mnemonic** — no operand/value. Tcl compiles some commands (`set`, `append`, …) straight to bytecode so they never appear as `CMD`. Values surface via `VAR_MOD` / `CMD_VM`; operands need Tcl's disassembler (documented in the Bytecode reference panel). Not a capture setting, not a parsing gap.
+- **RPM `%files` lists every file explicitly** (macOS rpm) — adding a presentation module or fixture means updating both the staging copy and `%files` in `build/build-rpm.sh`.
+- **Deploy loop:** `build-rpm.sh <ver> <rel>` → scp to `/shared/images/` → `install-onbox.sh <ver>-<rel>` (in-place upgrade preserves sessions); **hard-refresh** the browser (cached `app.css`/JS will mask changes).

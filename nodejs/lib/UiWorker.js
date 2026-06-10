@@ -26,6 +26,7 @@ var MIME_TYPES = {
     '.ico':  'image/x-icon',
     '.png':  'image/png',
     '.svg':  'image/svg+xml',
+    '.txt':  'text/plain; charset=utf-8',
     '.map':  'application/json; charset=utf-8'
 };
 

@@ -15,8 +15,8 @@
 #   ./build/build-rpm.sh [VERSION] [RELEASE]
 #
 # Examples:
-#   ./build/build-rpm.sh              # defaults: 0.1.0-0001
-#   ./build/build-rpm.sh 0.1.0 0003
+#   ./build/build-rpm.sh              # defaults: 0.2.0-0001
+#   ./build/build-rpm.sh 0.2.0 0003
 #
 # Output:
 #   build/dist/rultracer-<VERSION>-<RELEASE>.noarch.rpm
@@ -24,7 +24,7 @@
 
 set -euo pipefail
 
-VERSION="${1:-0.1.0}"
+VERSION="${1:-0.2.0}"
 RELEASE="${2:-0001}"
 APP_NAME="rultracer"
 
@@ -46,6 +46,7 @@ rm -rf "$STAGE"
 mkdir -p "$STAGE/nodejs/lib"
 mkdir -p "$STAGE/presentation/css"
 mkdir -p "$STAGE/presentation/js"
+mkdir -p "$STAGE/presentation/fixtures"
 mkdir -p "$STAGE/build"
 
 cp "$SRC_DIR/manifest.json"          "$STAGE/"
@@ -55,6 +56,7 @@ cp "$SRC_DIR/nodejs/lib/"*.js        "$STAGE/nodejs/lib/"
 cp "$SRC_DIR/presentation/index.html" "$STAGE/presentation/"
 cp "$SRC_DIR/presentation/css/"*.css  "$STAGE/presentation/css/"
 cp "$SRC_DIR/presentation/js/"*.js    "$STAGE/presentation/js/"
+cp "$SRC_DIR/presentation/fixtures/"*.txt "$STAGE/presentation/fixtures/"
 
 cp "$SRC_DIR/build/post-install.sh" "$STAGE/build/"
 chmod 0755 "$STAGE/build/post-install.sh"
@@ -164,6 +166,14 @@ exit 0
 /var/config/rest/iapps/${APP_NAME}/presentation/css/app.css
 /var/config/rest/iapps/${APP_NAME}/presentation/js/api.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/app.js
+/var/config/rest/iapps/${APP_NAME}/presentation/js/parser.js
+/var/config/rest/iapps/${APP_NAME}/presentation/js/model.js
+/var/config/rest/iapps/${APP_NAME}/presentation/js/seqdiagram.js
+/var/config/rest/iapps/${APP_NAME}/presentation/js/stepthrough.js
+/var/config/rest/iapps/${APP_NAME}/presentation/js/sourcemap.js
+/var/config/rest/iapps/${APP_NAME}/presentation/js/analysis.js
+/var/config/rest/iapps/${APP_NAME}/presentation/fixtures/example-logs.txt
+/var/config/rest/iapps/${APP_NAME}/presentation/fixtures/example-irule.txt
 %attr(0755, -, -) /var/config/rest/iapps/${APP_NAME}/build/post-install.sh
 SPEC
 

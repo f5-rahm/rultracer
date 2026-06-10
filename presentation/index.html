@@ -15,6 +15,7 @@
       <button class="tab" data-view="setup">Setup</button>
       <button class="tab" data-view="capture">Capture</button>
       <button class="tab" data-view="sessions">Sessions</button>
+      <button class="tab" data-view="analysis">Analysis</button>
     </nav>
     <div id="engine-state" class="engine-state" title="capture engine state">idle</div>
   </header>
@@ -168,9 +169,152 @@
       </table>
       <div id="session-detail" class="detail" hidden></div>
     </section>
+
+    <!-- ANALYSIS -->
+    <section class="view view-wide" data-view="analysis" hidden>
+      <div class="an-top">
+        <h2>Analyze a trace</h2>
+        <button id="an-load-open" type="button" class="primary">Load trace&hellip;</button>
+        <span id="an-status" class="msg"></span>
+      </div>
+
+      <div id="analysis-body" hidden>
+        <div class="an-controls">
+          <label>Group by
+            <select id="an-group">
+              <option value="flow">Flow (connection)</option>
+              <option value="event">Event</option>
+            </select>
+          </label>
+          <label>Trace
+            <select id="an-trace"></select>
+          </label>
+          <label class="cb"><input type="checkbox" id="an-collapse-bc" checked> Collapse bytecodes</label>
+          <label class="cb"><input type="checkbox" id="an-timescale"> Scale to time</label>
+          <label>Timing
+            <select id="an-timing" title="show enter/exit elapsed deltas on each hop">
+              <option value="off">Off</option>
+              <option value="label">Δ labels</option>
+              <option value="bracket">Hop brackets</option>
+            </select>
+          </label>
+          <span class="legend">
+            <span class="lg lg-tmm"></span>TMM
+            <span class="lg lg-vm"></span>TCL VM
+            <span class="lg lg-cross"></span>handoff
+          </span>
+          <span class="spacer"></span>
+          <span class="zoom">
+            <button id="seq-zoom-out" type="button" title="zoom out">&minus;</button>
+            <button id="seq-zoom-reset" type="button" title="reset zoom">&#10530;</button>
+            <button id="seq-zoom-in" type="button" title="zoom in">+</button>
+          </span>
+          <button id="an-export-svg" type="button" title="download the diagram as SVG">SVG</button>
+          <button id="an-export-png" type="button" title="download the diagram as PNG">PNG</button>
+          <button id="an-mermaid" type="button" title="download a Mermaid sequenceDiagram of the selected trace">Mermaid</button>
+        </div>
+
+        <div class="an-grid">
+          <div class="an-diagram-pane">
+            <div class="pane-title">Sequence diagram <small>click a row to cross-highlight the table</small></div>
+            <div id="seq-canvas" class="seq-canvas"></div>
+          </div>
+
+          <aside class="an-step-pane">
+            <div class="pane-title">Step through</div>
+            <div id="step-scrubber" class="step-scrubber"></div>
+            <div id="step-panel" class="step-panel"></div>
+            <div id="step-table" class="step-table-wrap"></div>
+          </aside>
+        </div>
+
+        <details class="bc-ref">
+          <summary>Bytecode reference — opcode meanings &amp; why some commands don’t appear</summary>
+          <div class="bc-ref-body">
+            <p class="bc-note">
+              <strong>Why don’t I see some common Tcl commands (e.g. <code>set</code>, <code>append</code>) in the trace?</strong>
+              The Tcl interpreter compiles the script to byte code before the first execution, and some Tcl
+              commands are replaced by the byte codes — so they never appear as <code>CMD</code> occurrences.
+              Their effects still surface: a variable write shows up as <code>VAR_MOD</code>, and a command
+              invocation as <code>CMD_VM</code>/<code>CMD</code>. Bytecode occurrences also carry only the
+              instruction <em>mnemonic</em> — rule-profiler does not emit the operand/value being pushed.
+            </p>
+            <table class="bc-table">
+              <thead><tr><th>opcode</th><th>meaning</th></tr></thead>
+              <tbody>
+                <tr><td>push1</td><td>push a literal/constant onto the stack</td></tr>
+                <tr><td>loadScalarStk</td><td>load a scalar variable’s value</td></tr>
+                <tr><td>storeScalarStk</td><td>store into a scalar variable (surfaces as <code>VAR_MOD</code>)</td></tr>
+                <tr><td>invokeStk1</td><td>invoke a command (the following <code>CMD_VM</code> names it)</td></tr>
+                <tr><td>concat1</td><td>concatenate strings on the stack</td></tr>
+                <tr><td>eq</td><td>equality comparison (<code>==</code>)</td></tr>
+                <tr><td>done</td><td>end of the script’s byte code</td></tr>
+              </tbody>
+            </table>
+            <p class="bc-links">
+              Further reading:
+              <a href="https://community.f5.com/kb/technicalarticles/irule-execution-tracing-and-performance-profiling-part-3/276362" target="_blank" rel="noopener">iRule Execution Tracing &amp; Performance Profiling, Part 3</a>
+              &middot;
+              <a href="https://community.f5.com/kb/technicalarticles/advanced-irules-an-abstract-view-of-irules-with-the-tcl-bytecode-disassembler/286068" target="_blank" rel="noopener">An Abstract View of iRules with the Tcl Bytecode Disassembler</a>
+              — use Tcl’s disassembler to recover the literals/operands the trace omits.
+            </p>
+          </div>
+        </details>
+
+        <div class="an-source">
+          <div class="pane-title">Source coverage <small>fired commands highlighted in their iRule handler</small></div>
+          <div class="sm-legend">
+            <span class="smlg smlg-hit"></span>fired <em>(µs · count)</em>
+            <span class="smlg smlg-amb"></span>ambiguous
+            <span class="smlg smlg-dim"></span>not observed (branch not taken)
+            <span class="sm-leg-note">click a fired line to jump to it in the trace</span>
+          </div>
+          <details class="sm-srcwrap">
+            <summary>iRule source (auto-fetched for known rules; click to view or paste — edits re-annotate live)</summary>
+            <div class="sm-controls">
+              <button id="sm-load-example" type="button">Load example iRule</button>
+            </div>
+            <textarea id="sm-source" rows="6" placeholder="iRule source&hellip;"></textarea>
+          </details>
+          <div id="sm-output" class="sm-output"></div>
+        </div>
+      </div>
+
+      <!-- Load dialog -->
+      <div id="an-dialog" class="modal" hidden>
+        <div class="modal-card">
+          <div class="modal-head"><span>Load a trace</span><button id="an-dialog-close" class="modal-x" type="button" aria-label="close">&times;</button></div>
+          <div class="modal-body">
+            <div class="modal-actions">
+              <button id="an-load-example" type="button">Load bundled example</button>
+              <label class="filebtn">Choose file&hellip;<input type="file" id="an-file" accept=".csv,.txt,.json,.log" hidden></label>
+            </div>
+            <p class="modal-hint">A raw rule-profiler capture / <code>raw.csv</code> (syslog-prefixed or stripped), or a <code>rultracer-sessions-*.json</code> backup.</p>
+            <div id="an-session-pick" hidden>
+              <label class="modal-label">Session in backup
+                <select id="an-session-select"></select>
+              </label>
+            </div>
+            <label class="modal-label">&hellip;or paste raw trace text</label>
+            <textarea id="an-raw" rows="8" placeholder="Paste raw rule-profiler output (with or without the syslog prefix) or a session's raw.csv."></textarea>
+            <div id="an-dialog-msg" class="msg"></div>
+          </div>
+          <div class="modal-foot">
+            <button id="an-dialog-cancel" type="button">Cancel</button>
+            <button id="an-parse" type="button" class="primary">Parse</button>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
   <script src="js/api.js"></script>
+  <script src="js/parser.js"></script>
+  <script src="js/model.js"></script>
+  <script src="js/seqdiagram.js"></script>
+  <script src="js/stepthrough.js"></script>
+  <script src="js/sourcemap.js"></script>
+  <script src="js/analysis.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
