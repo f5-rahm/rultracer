@@ -6,6 +6,7 @@
   <title>rultracer</title>
   <!-- Anchor all relative asset URLs under the UiWorker base, regardless of trailing slash. -->
   <base href="/mgmt/shared/rultracer/ui/">
+  <link rel="stylesheet" href="vendor/d3-flamegraph.css">
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -179,6 +180,13 @@
       </div>
 
       <div id="analysis-body" hidden>
+        <nav class="an-subtabs" role="tablist">
+          <button type="button" class="an-subtab active" data-pane="sequence">Sequence</button>
+          <button type="button" class="an-subtab" data-pane="flame">Flamegraph</button>
+          <button type="button" class="an-subtab" data-pane="diff">Diff</button>
+        </nav>
+
+        <div id="an-pane-sequence" class="an-pane">
         <div class="an-controls">
           <label>Group by
             <select id="an-group">
@@ -221,7 +229,9 @@
           </div>
 
           <aside class="an-step-pane">
-            <div class="pane-title">Step through</div>
+            <div class="pane-title">Step through
+              <label class="cb step-follow-cb"><input type="checkbox" id="step-follow" checked> Follow diagram</label>
+            </div>
             <div id="step-scrubber" class="step-scrubber"></div>
             <div id="step-panel" class="step-panel"></div>
             <div id="step-table" class="step-table-wrap"></div>
@@ -278,6 +288,65 @@
           </details>
           <div id="sm-output" class="sm-output"></div>
         </div>
+        </div><!-- /an-pane-sequence -->
+
+        <div id="an-pane-flame" class="an-pane" hidden>
+          <div class="an-controls">
+            <label>Mode
+              <select id="fl-mode" title="aggregated profiler view vs. literal icicle of the selected trace">
+                <option value="agg">Aggregated (merge call paths)</option>
+                <option value="literal">Literal (selected trace)</option>
+              </select>
+            </label>
+            <label id="fl-scope-wrap">Scope
+              <select id="fl-scope" title="which spans to aggregate"></select>
+            </label>
+            <span class="legend">
+              <span class="lg lg-tmm"></span>TMM
+              <span class="lg lg-vm"></span>TCL VM
+            </span>
+            <span class="spacer"></span>
+            <span id="fl-summary" class="msg"></span>
+            <button id="fl-reset" type="button" title="reset zoom">Reset zoom</button>
+            <button id="fl-folded" type="button" title="download folded stacks (Brendan-Gregg format)">Folded</button>
+          </div>
+          <div class="pane-title">Flamegraph
+            <small>width = inclusive µs · click a frame to zoom · bytecodes pruned (counts in tooltip) · literal mode stacks one graph per event (graph width ∝ event duration)</small>
+          </div>
+          <div id="flame-canvas" class="flame-canvas"></div>
+        </div>
+
+        <div id="an-pane-diff" class="an-pane" hidden>
+          <div class="an-controls">
+            <span class="diff-baseline">Baseline <strong>A</strong>: <span id="diff-a-name">current trace</span></span>
+            <span class="diff-vs">vs</span>
+            <span class="diff-compare">Comparison <strong>B</strong>: <span id="diff-b-name" class="muted">none loaded</span></span>
+            <button id="diff-load-b" type="button" class="primary">Load comparison&hellip;</button>
+            <span class="spacer"></span>
+            <label id="diff-mode-wrap">View
+              <select id="diff-mode">
+                <option value="differential">Differential (B sized, Δ colour)</option>
+                <option value="side">Side by side</option>
+              </select>
+            </label>
+            <button id="diff-reset" type="button" title="reset zoom">Reset zoom</button>
+          </div>
+          <div class="pane-title">Diff
+            <small>Δ self time B−A · <span class="diff-key diff-slower">red = slower in B</span> · <span class="diff-key diff-faster">blue = faster in B</span></small>
+          </div>
+          <p id="diff-hint" class="flame-empty">Load a second capture (B) to compare against the current trace (A).</p>
+          <div id="diff-single" class="flame-canvas" hidden></div>
+          <div id="diff-sxs" class="diff-sxs" hidden>
+            <div class="diff-col">
+              <div class="pane-title">A <small id="diff-sxs-a-label"></small></div>
+              <div id="diff-canvas-a" class="flame-canvas"></div>
+            </div>
+            <div class="diff-col">
+              <div class="pane-title">B <small id="diff-sxs-b-label"></small></div>
+              <div id="diff-canvas-b" class="flame-canvas"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Load dialog -->
@@ -308,12 +377,16 @@
     </section>
   </main>
 
+  <script src="vendor/d3.v7.min.js"></script>
+  <script src="vendor/d3-flamegraph.min.js"></script>
   <script src="js/api.js"></script>
   <script src="js/parser.js"></script>
   <script src="js/model.js"></script>
+  <script src="js/flame.js"></script>
   <script src="js/seqdiagram.js"></script>
   <script src="js/stepthrough.js"></script>
   <script src="js/sourcemap.js"></script>
+  <script src="js/flamegraph.js"></script>
   <script src="js/analysis.js"></script>
   <script src="js/app.js"></script>
 </body>

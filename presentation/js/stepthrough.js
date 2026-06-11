@@ -39,19 +39,37 @@
     onCursor(fn) { this.cursorHandlers.push(fn); }
     _emitCursor(recI) { this.cursorHandlers.forEach((fn) => fn(recI)); }
 
+    // Move the cursor by delta records (clamped), emitting cross-highlight.
+    step(delta) {
+      if (!this.unit) { return; }
+      const recs = this.unit.recs;
+      const pos = Math.max(0, Math.min(recs.length - 1, this.cursorPos + delta));
+      if (recs[pos]) { this.setCursor(recs[pos].i, true); }
+    }
+
     render(unit) {
       this.unit = unit;
       this.rowEls.clear();
       const recs = unit.recs;
       const tsMin = recs.length ? recs[0].tsMicros : 0;
 
-      // --- scrubber ---
+      // --- scrubber + step controls ---
       this.scrubC.innerHTML = '';
+      const prev = el('button', { type: 'button', class: 'step-btn', title: 'previous step (←)', text: '◀' });
+      const next = el('button', { type: 'button', class: 'step-btn', title: 'next step (→)', text: '▶' });
       const slider = el('input', { type: 'range', min: '0', max: String(Math.max(0, recs.length - 1)), value: '0', class: 'scrubber' });
-      const readout = el('span', { class: 'scrub-readout', text: '0 / ' + recs.length });
+      const readout = el('span', { class: 'scrub-readout', text: '1 / ' + recs.length });
+      prev.addEventListener('click', () => this.step(-1));
+      next.addEventListener('click', () => this.step(1));
       slider.addEventListener('input', () => this.setCursor(recs[parseInt(slider.value, 10)].i, true));
+      // Arrow keys step when focus is anywhere in the scrubber row.
+      this.scrubC.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft') { e.preventDefault(); this.step(-1); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); this.step(1); }
+      });
       this.scrubC.appendChild(el('label', { class: 'scrub-label', text: 'Timeline' }));
       this.scrubC.appendChild(slider);
+      this.scrubC.appendChild(el('span', { class: 'step-btns' }, [prev, next]));
       this.scrubC.appendChild(readout);
       this._slider = slider; this._readout = readout;
 
@@ -102,10 +120,24 @@
       // highlight rows: executed (<=pos) vs current
       this.rowEls.forEach((tr) => { tr.classList.remove('current'); tr.classList.toggle('done', parseInt(tr.dataset.pos, 10) <= pos); });
       const cur = this.rowEls.get(recI);
-      if (cur) { cur.classList.add('current'); cur.scrollIntoView({ block: 'nearest' }); }
+      if (cur) { cur.classList.add('current'); this._scrollRowIntoView(cur); }
 
       this._renderPanel(pos);
       if (emit) { this._emitCursor(recI); }
+    }
+
+    // Keep the current row visible WITHIN the table's own scroll box only.
+    // (Element.scrollIntoView would also scroll the window, pushing the scrubber
+    // off-screen when the pane sits below the fold — the bug we're fixing.)
+    _scrollRowIntoView(row) {
+      const wrap = this.tableC;
+      if (!wrap || wrap.scrollHeight <= wrap.clientHeight) { return; }
+      const thead = wrap.querySelector('thead');
+      const hh = thead ? thead.offsetHeight : 0;   // sticky header overlaps the top
+      const wr = wrap.getBoundingClientRect();
+      const rr = row.getBoundingClientRect();
+      if (rr.top < wr.top + hh) { wrap.scrollTop -= (wr.top + hh - rr.top); }
+      else if (rr.bottom > wr.bottom) { wrap.scrollTop += (rr.bottom - wr.bottom); }
     }
 
     // Replay state up to and including cursor position.

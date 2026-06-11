@@ -122,6 +122,8 @@ table.sessions tr.clickable:hover { background: var(--panel); cursor: pointer; }
 .an-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin: 14px 0 12px; }
 .an-controls label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+/* [hidden] must beat the inline-flex above (same trap as the Phase 2 .modal[hidden] bug). */
+.an-controls label[hidden] { display: none; }
 .an-controls select { min-width: 0; padding: 5px 8px; font-size: 13px; }
 .an-controls #an-trace { min-width: 220px; max-width: 360px; }
 .an-controls .spacer { flex: 1; }
@@ -257,3 +259,52 @@ table.step-table td.val { white-space: pre; }
   .an-grid { grid-template-columns: 1fr; }
   .seq-canvas { height: 60vh; }
 }
+
+/* ---- Phase 3: flamegraph + diff sub-tabs ------------------------------- */
+.an-subtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+.an-subtab { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted);
+  padding: 8px 16px; font-size: 14px; cursor: pointer; }
+.an-subtab:hover { color: var(--fg); }
+.an-subtab.active { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
+.an-pane[hidden] { display: none; }
+
+/* the d3-flame-graph renders dark-on-light, so give it a white surface like
+   the sequence diagram. */
+.flame-canvas { background: #ffffff; border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px; min-height: 120px; overflow-x: auto; }
+.flame-empty { color: var(--muted); font-size: 13px; padding: 24px; text-align: center; }
+.flame-stack-item { margin-bottom: 14px; }
+.flame-stack-item:last-child { margin-bottom: 0; }
+.flame-stack-label { display: inline-block; white-space: nowrap; font-size: 12px; color: #475569;
+  font-weight: 600; padding: 2px 2px 6px; border-bottom: 1px solid #e2e8f0; margin-bottom: 6px; }
+#fl-summary { font-size: 12px; }
+#fl-folded, #fl-reset, #diff-reset, #diff-load-b { padding: 6px 12px; font-size: 13px; }
+
+/* d3-flame-graph label/title text on the white surface */
+.flame-canvas .d3-flame-graph-label { color: #1b2530; }
+.flame-canvas text { fill: #1b2530; }
+
+/* diff controls + side-by-side */
+.diff-baseline, .diff-compare, .diff-vs { font-size: 13px; color: var(--muted); }
+.diff-baseline strong, .diff-compare strong { color: var(--fg); }
+.diff-vs { opacity: .6; }
+.diff-key { font-weight: 600; }
+.diff-key.diff-slower { color: #c92a2a; }
+.diff-key.diff-faster { color: #2166c9; }
+.diff-sxs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.diff-col { min-width: 0; }
+
+@media (max-width: 1100px) {
+  .diff-sxs { grid-template-columns: 1fr; }
+}
+
+/* ---- step-through: pinned scrubber + step buttons + follow toggle ------- */
+.step-scrubber { position: sticky; top: 0; z-index: 3; background: var(--panel);
+  padding-top: 2px; }
+.step-btns { display: inline-flex; gap: 4px; }
+.step-btn { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--fg); padding: 2px 9px; font-size: 13px; line-height: 1.4; cursor: pointer; }
+.step-btn:hover { border-color: var(--accent); }
+.step-follow-cb { float: right; text-transform: none; letter-spacing: 0; font-weight: 400;
+  font-size: 12px; color: var(--muted); }
+.step-follow-cb input { vertical-align: -1px; }

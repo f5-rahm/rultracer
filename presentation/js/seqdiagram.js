@@ -102,12 +102,14 @@
       this.rowByRec = new Map();
       this.svgEl = null;
       this.lx = {};
+      this.follow = true;   // auto-center the diagram on the highlighted span
       this._initPan();
     }
 
     onSelect(fn) { this.selectHandlers.push(fn); }
     _emitSelect(recI) { this.selectHandlers.forEach((fn) => fn(recI)); }
     setMode(patch) { Object.assign(this.mode, patch); if (this.unit) { this.render(this.unit); } }
+    setFollow(v) { this.follow = !!v; }   // toggle without a full re-render
 
     _initPan() {
       let down = false; let sx = 0; let sy = 0; let sl = 0; let st = 0;
@@ -342,7 +344,11 @@
       if (!row || !this._band) { if (this._band) { this._band.setAttribute('visibility', 'hidden'); } return; }
       this._band.setAttribute('y', row.y - ROW_H / 2);
       this._band.setAttribute('visibility', 'visible');
-      this.container.scrollTop = Math.max(0, (row.y * this.scale) - this.container.clientHeight / 2);
+      // Only auto-center when "follow" is on; the band stays visible either way,
+      // so the diagram doesn't lurch under the user when they don't want it to.
+      if (this.follow) {
+        this.container.scrollTop = Math.max(0, (row.y * this.scale) - this.container.clientHeight / 2);
+      }
     }
 
     // ---- export (self-contained, styles already embedded) ------------------

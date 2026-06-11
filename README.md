@@ -15,6 +15,14 @@ report). See [PLAN.md](PLAN.md) for the full design and phased plan.
   diagram, linked step-through (table + scrubber + variable/command replay), and
   best-effort iRule source mapping. Open a finalized session from **Sessions →
   analyze**, or use **Analysis → Load bundled example / paste** to work offline.
+- **Phase 3** (v0.3.0 — flamegraph + diff): interactive flamegraph (vendored
+  d3 + d3-flame-graph, no build step) under the **Analysis → Flamegraph** sub-tab —
+  aggregated profiler view (scope: whole-capture / per-event / per-flow, identical
+  call paths merged) or a literal icicle of the selected trace; frames tinted
+  teal/orange by TMM/TCL-VM domain, width = inclusive µs, bytecodes pruned (counts
+  in the tooltip), folded-stack export. The **Diff** sub-tab compares a second
+  capture against the current one — differential (B sized, frames red/blue by
+  self-time delta) or side-by-side.
 
 ## Layout
 
@@ -24,7 +32,8 @@ nodejs/               on-box workers (run in restnoded, Node 6.9.1 -> ES5)
   lib/                shared helpers + RestWorkers
 presentation/         browser SPA (vanilla JS, no build step)
 build/                RPM build + install scripts
-test/                 zero-dependency test harness (node test/unit.js + test/phase2.js)
+test/                 zero-dependency test harness (node test/unit.js + test/phase2.js + test/phase3.js)
+presentation/vendor/  vendored d3 (ISC) + d3-flame-graph (Apache-2.0); see vendor/LICENSES.md
 docs/                 design docs and on-box runbooks
 background info/       source articles, man page, example captures (parser fixtures)
 ```

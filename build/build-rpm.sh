@@ -24,7 +24,7 @@
 
 set -euo pipefail
 
-VERSION="${1:-0.2.0}"
+VERSION="${1:-0.3.0}"
 RELEASE="${2:-0001}"
 APP_NAME="rultracer"
 
@@ -47,6 +47,7 @@ mkdir -p "$STAGE/nodejs/lib"
 mkdir -p "$STAGE/presentation/css"
 mkdir -p "$STAGE/presentation/js"
 mkdir -p "$STAGE/presentation/fixtures"
+mkdir -p "$STAGE/presentation/vendor"
 mkdir -p "$STAGE/build"
 
 cp "$SRC_DIR/manifest.json"          "$STAGE/"
@@ -57,6 +58,7 @@ cp "$SRC_DIR/presentation/index.html" "$STAGE/presentation/"
 cp "$SRC_DIR/presentation/css/"*.css  "$STAGE/presentation/css/"
 cp "$SRC_DIR/presentation/js/"*.js    "$STAGE/presentation/js/"
 cp "$SRC_DIR/presentation/fixtures/"*.txt "$STAGE/presentation/fixtures/"
+cp "$SRC_DIR/presentation/vendor/"*    "$STAGE/presentation/vendor/"
 
 cp "$SRC_DIR/build/post-install.sh" "$STAGE/build/"
 chmod 0755 "$STAGE/build/post-install.sh"
@@ -168,10 +170,16 @@ exit 0
 /var/config/rest/iapps/${APP_NAME}/presentation/js/app.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/parser.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/model.js
+/var/config/rest/iapps/${APP_NAME}/presentation/js/flame.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/seqdiagram.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/stepthrough.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/sourcemap.js
+/var/config/rest/iapps/${APP_NAME}/presentation/js/flamegraph.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/analysis.js
+/var/config/rest/iapps/${APP_NAME}/presentation/vendor/d3.v7.min.js
+/var/config/rest/iapps/${APP_NAME}/presentation/vendor/d3-flamegraph.min.js
+/var/config/rest/iapps/${APP_NAME}/presentation/vendor/d3-flamegraph.css
+/var/config/rest/iapps/${APP_NAME}/presentation/vendor/LICENSES.md
 /var/config/rest/iapps/${APP_NAME}/presentation/fixtures/example-logs.txt
 /var/config/rest/iapps/${APP_NAME}/presentation/fixtures/example-irule.txt
 %attr(0755, -, -) /var/config/rest/iapps/${APP_NAME}/build/post-install.sh
