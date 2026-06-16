@@ -22,8 +22,12 @@ preflight** that's currently a manual step before the *first* install on a box:
 # iApps LX wipes the package dir (/var/config/rest/iapps/rultracer/) on EVERY
 # install, so persistent session data lives under /shared/rultracer/. Create it
 # once and hand it to the worker's user (restnoded, uid 198) so the worker can
-# create its data subdir there:
-ssh -p <port> root@<host> 'mkdir -p /shared/rultracer && chown restnoded:restnoded /shared/rultracer'
+# create its data subdir there. NOTE: there is NO group named "restnoded" —
+# restnoded's primary group is numeric (gid 498 on observed 17.x boxes), so use
+# the trailing colon to set the group to the user's primary group (writing
+# `restnoded:restnoded` fails with "invalid group"):
+ssh -p <port> root@<host> 'mkdir -p /shared/rultracer && chown restnoded: /shared/rultracer'
+# observed good state:  drwxr-xr-x  restnoded  498  /shared/rultracer
 
 # ── Each deploy ───────────────────────────────────────────────────────────────
 ./build/build-rpm.sh <version> <release>
@@ -33,14 +37,14 @@ ssh -p <port> root@<host> /shared/images/install-onbox.sh <version>-<release>
 # then hard-refresh the browser UI. Bump <release> each on-box iteration.
 ```
 
-- Verify the exact worker user/group on the box (memory: workers run as **uid 198**;
-  the data dir under `/shared/rultracer/` is created by the worker, so it must own
-  the parent). Confirm `restnoded:restnoded` is correct before publishing it.
+- Confirmed on a 17.x box: `/shared/rultracer` is `drwxr-xr-x restnoded 498`
+  (owner = worker user `restnoded`/uid 198; group = restnoded's primary group,
+  gid 498, which has no name — so `chown restnoded:` is the portable form).
 - **Consider eliminating the manual step:** `install-onbox.sh`'s preflight is
   supposed to provision `/shared/rultracer` as root — check why it still needs a
   manual `mkdir`/`chown` (likely it creates the dir but doesn't `chown` it to the
-  worker). If safe, fold the `mkdir -p` + `chown restnoded:restnoded` into the
-  preflight so the one-time step disappears, and update the doc to match. See the
+  worker). If safe, fold the `mkdir -p` + `chown restnoded:` into the preflight so
+  the one-time step disappears, and update the doc to match. See the
   `feedback_shared-data-needs-preflight` memory for the install-wipe context.
 
 ## 2. Slim the README to **usage + features only**
