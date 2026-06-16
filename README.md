@@ -23,6 +23,22 @@ report). See [PLAN.md](PLAN.md) for the full design and phased plan.
   in the tooltip), folded-stack export. The **Diff** sub-tab compares a second
   capture against the current one — differential (B sized, frames red/blue by
   self-time delta) or side-by-side.
+- **Phase 4** (v0.4.0 — cycles vs CPU): the **Analysis → Stats** sub-tab turns
+  the box's own `ltm rule stats` (per-event hardware cycle counters) into the
+  DevCentral "Evaluating Performance" tables — cycles → µs, %CPU/request (vs the
+  whole-box budget, Σ all-core MHz), and max req/sec. **Reset** zeroes a rule's
+  counters; drive a high-volume run (100k+ conns, profiler OFF — its logging
+  inflates timings); **Snapshot** reads CPU + stats and persists them on the
+  session. A reconcile panel puts the authoritative cycles next to the
+  trace-derived numbers (the gap = profiler overhead), plus a trace-derived
+  per-command table (the only per-command view).
+- **Phase 4.1** (v0.4.1 — guided Run Test): Setup now sequences a whole test as
+  one session. Toggle **cycles** and/or **profiler trace**; the cycles phase runs
+  first with the profiler OFF — reset, drive the high-volume load (external with a
+  pause/Continue, or an on-box override that fires it for you with bounded
+  concurrency — flagged as skewing the measurement), then snapshot. The trace
+  phase then attaches the profiler to the same session for the small run. A
+  cycles-only run finalizes straight to the Stats sub-tab.
 
 ## Layout
 
@@ -32,7 +48,7 @@ nodejs/               on-box workers (run in restnoded, Node 6.9.1 -> ES5)
   lib/                shared helpers + RestWorkers
 presentation/         browser SPA (vanilla JS, no build step)
 build/                RPM build + install scripts
-test/                 zero-dependency test harness (node test/unit.js + test/phase2.js + test/phase3.js)
+test/                 zero-dependency test harness (node test/unit.js + test/phase2.js + test/phase3.js + test/phase4.js)
 presentation/vendor/  vendored d3 (ISC) + d3-flame-graph (Apache-2.0); see vendor/LICENSES.md
 docs/                 design docs and on-box runbooks
 background info/       source articles, man page, example captures (parser fixtures)

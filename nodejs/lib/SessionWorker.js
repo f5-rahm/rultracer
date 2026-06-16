@@ -12,6 +12,7 @@
 var Store = require('./store');
 var restutil = require('./restutil');
 var util = require('./util');
+var cpustats = require('./cpustats');
 
 function SessionWorker() {
     this.WORKER_URI_PATH = 'shared/rultracer/sessions';
@@ -63,7 +64,79 @@ SessionWorker.prototype.onPost = function (restOperation) {
     if (seg.length >= 1 && seg[0] === 'import') {
         return this._import(restOperation);
     }
+    // POST /sessions/begin { config, name } -> create the test session shell up
+    // front (Phase 4.1) so the cycles phase can reset/snapshot into it before the
+    // profiler is ever enabled.
+    if (seg.length >= 1 && seg[0] === 'begin') {
+        return this._begin(restOperation);
+    }
+    // POST /sessions/<id>/cycles { action:'reset'|'snapshot'|'finalize', rules:[...] }
+    if (seg.length >= 2 && seg[1] === 'cycles') {
+        return this._cycles(restOperation, seg[0]);
+    }
     restutil.fail(this, restOperation, new Error('unknown sessions path: POST /' + seg.join('/')));
+};
+
+// POST /sessions/begin { config, name } -> { sessionId }
+// Creates a session shell in the 'measuring' state. The cycles phase resets and
+// snapshots into it; the trace phase (engine.start with this sessionId) then
+// attaches. A cycles-only run finalizes it directly (see the 'finalize' action).
+SessionWorker.prototype._begin = function (restOperation) {
+    var self = this;
+    var body = restOperation.getBody() || {};
+    this.store.createSession({
+        name: body.name || ('test ' + new Date().toISOString()),
+        status: 'measuring',
+        config: body.config || {}
+    }).then(function (m) {
+        restutil.ok(self, restOperation, { sessionId: m.id });
+    }).catch(function (err) { restutil.fail(self, restOperation, err); });
+};
+
+// Phase 4 cycles-vs-CPU. `reset` zeroes the rules' stat counters (scopes the
+// window for a high-volume timing run); `snapshot` reads CPU facts + per-event
+// `ltm rule stats` and persists them into the session manifest as `cycles`, so
+// the Stats view (and a backup .json) carries authoritative cycle data offline.
+SessionWorker.prototype._cycles = function (restOperation, id) {
+    var self = this;
+    var body = restOperation.getBody() || {};
+    // Finalize a cycles-only run (no profiler trace): mark the shell session
+    // 'finalized' so it lists + analyzes (Stats populated, other panes empty).
+    // Handled before the rules guard since it needs no rule list.
+    if (body.action === 'finalize') {
+        // A cycles-only run has no profiler trace, so write an empty raw.csv —
+        // otherwise GET /sessions/<id>/raw (the Analysis "analyze" path) fails on
+        // a missing file. The Stats pane renders from manifest.cycles; the trace
+        // panes render empty.
+        this.store.writeRaw(id, []).then(function () {
+            return self.store.updateManifest(id, {
+                status: 'finalized',
+                finalizedAt: new Date().toISOString()
+            });
+        }).then(function (m) {
+            restutil.ok(self, restOperation, { sessionId: id, manifest: m });
+        }).catch(function (err) { restutil.fail(self, restOperation, err); });
+        return;
+    }
+    var rules = Array.isArray(body.rules) ? body.rules.filter(Boolean) : [];
+    if (!rules.length) {
+        return restutil.fail(this, restOperation, new Error('expected { rules: [...] } in body'));
+    }
+    if (body.action === 'reset') {
+        Promise.all(rules.map(function (n) { return cpustats.resetStats(n); }))
+            .then(function () { restutil.ok(self, restOperation, { reset: rules }); })
+            .catch(function (err) { restutil.fail(self, restOperation, err); });
+        return;
+    }
+    if (body.action === 'snapshot') {
+        cpustats.snapshot(rules).then(function (cycles) {
+            return self.store.updateManifest(id, { cycles: cycles }).then(function () {
+                restutil.ok(self, restOperation, { cycles: cycles });
+            });
+        }).catch(function (err) { restutil.fail(self, restOperation, err); });
+        return;
+    }
+    restutil.fail(this, restOperation, new Error('unknown cycles action: ' + body.action));
 };
 
 // GET /sessions/export -> JSON bundle of every session's manifest + raw.csv

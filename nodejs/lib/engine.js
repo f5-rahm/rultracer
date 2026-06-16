@@ -92,6 +92,16 @@ CaptureEngine.prototype.start = function (cfg) {
 
     return logchain.ensurePublisher(publisherMode, cfg.publisherName).then(function (pub) {
         self.publisher = pub;
+        // Phase 4.1: when the cycles phase already created the session shell up
+        // front, ATTACH to it (so the pre-profiler snapshot persisted into the
+        // same manifest) instead of creating a second session.
+        if (cfg.sessionId) {
+            return self.store.updateManifest(cfg.sessionId, {
+                status: 'configuring',
+                config: self.config,
+                publisher: pub
+            });
+        }
         return self.store.createSession({
             name: cfg.name || ('capture ' + new Date().toISOString()),
             status: 'configuring',

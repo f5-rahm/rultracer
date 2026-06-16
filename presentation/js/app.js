@@ -19,7 +19,9 @@
     lastSessionId: null,    // sessionId of the most recent armed capture
     periodMs: 0,            // capture period (ms) from the last Start
     stopMode: 'manual',     // 'manual' | 'period'
-    captureStartedAt: null  // wall-clock ms when engine entered 'capturing'
+    captureStartedAt: null, // wall-clock ms when engine entered 'capturing'
+    testPhase: null,        // Phase 4.1: 'cycles' | 'trace' | null
+    testFlow: null          // Phase 4.1: the in-flight test orchestration state
   };
 
   var METHODS_WITH_BODY = { POST: 1, PUT: 1, PATCH: 1 };
@@ -119,8 +121,9 @@
   function syncPubModeUi() {
     var mode = radioValue('pubMode');
     var routed = state.routedPubs || [];
-    $('pub-select-field').hidden = (mode !== 'reuse');
-    if (mode === 'reuse' && routed.length === 0) {
+    // pub-select only when reusing AND the trace phase is on (it's trace-only).
+    $('pub-select-field').hidden = (mode !== 'reuse') || !$('trace-enable').checked;
+    if (mode === 'reuse' && routed.length === 0 && $('trace-enable').checked) {
       msg($('setup-msg'), 'No publisher routes to local-syslog; select Use/create rultracer_pub.', 'err');
     } else {
       msg($('setup-msg'), '', '');
@@ -188,40 +191,166 @@
     return r ? r.value : null;
   }
 
-  function startCapture() {
-    var occMask = checkedValues($('occmask'));
-    if (!state.currentVS) { return msg($('setup-msg'), 'Choose a virtual server.', 'err'); }
-    if (occMask.length === 0) { return msg($('setup-msg'), 'Select at least one occurrence type.', 'err'); }
+  function buildConfig() {
     var pubMode = radioValue('pubMode');
-    var config = {
+    return {
       vs: state.currentVS,
       rules: checkedValues($('rules')),
       events: checkedValues($('events')),
-      occMask: occMask,
+      occMask: checkedValues($('occmask')),
       periodMs: parseInt($('period').value, 10),
       stopMode: radioValue('stopMode'),
       publisherMode: pubMode,
       publisherName: (pubMode === 'reuse') ? $('pub-select').value : undefined,
       name: $('capname').value || undefined
     };
-    state.periodMs = config.periodMs;
-    state.stopMode = config.stopMode;
-    if (pubMode === 'reuse' && !config.publisherName) {
+  }
+
+  // ---- Phase 4.1 test orchestration ----------------------------------------
+  // A "test" is one session that may carry a cycles phase (reset -> high-volume
+  // load -> snapshot, profiler OFF) and/or a trace phase (profiler capture). The
+  // cycles phase MUST precede the trace phase so `ltm rule stats` are measured
+  // with the profiler off (the profiler's syslog logging inflates the counters).
+  // The browser drives the sequence; the engine keeps its own safety net.
+  function runTest() {
+    var cyclesOn = $('cycles-enable').checked;
+    var traceOn = $('trace-enable').checked;
+    var config = buildConfig();
+
+    if (!state.currentVS) { return msg($('setup-msg'), 'Choose a virtual server.', 'err'); }
+    if (!cyclesOn && !traceOn) { return msg($('setup-msg'), 'Enable at least one phase (cycles and/or trace).', 'err'); }
+    if (cyclesOn && config.rules.length === 0) {
+      return msg($('setup-msg'), 'Select at least one iRule — the cycles phase reads per-rule ltm stats.', 'err');
+    }
+    if (traceOn && config.occMask.length === 0) {
+      return msg($('setup-msg'), 'Select at least one occurrence type for the profiler trace.', 'err');
+    }
+    if (traceOn && config.publisherMode === 'reuse' && !config.publisherName) {
       return msg($('setup-msg'), 'Pick a publisher from the dropdown for reuse mode.', 'err');
     }
-    msg($('setup-msg'), 'Starting...', '');
+
+    var loadSource = radioValue('loadSource');
+    var onbox = null;
+    if (cyclesOn && loadSource === 'onbox') {
+      onbox = {
+        host: $('hv-host').value.trim(),
+        port: parseInt($('hv-port').value, 10) || 80,
+        path: $('hv-path').value || '/',
+        https: $('hv-https').checked,
+        count: parseInt($('hv-count').value, 10) || 1,
+        concurrency: parseInt($('hv-conc').value, 10) || 20,
+        highVolume: true
+      };
+      if (!onbox.host) { return msg($('setup-msg'), 'Enter the VIP address for on-box load generation.', 'err'); }
+    }
+
+    state.periodMs = config.periodMs;
+    state.stopMode = config.stopMode;
+    state.testFlow = {
+      config: config, cyclesOn: cyclesOn, traceOn: traceOn,
+      rules: config.rules, loadSource: loadSource, onbox: onbox, sessionId: null
+    };
+
+    msg($('setup-msg'), 'Starting test…', '');
     $('start-btn').disabled = true;
-    API.startCapture(config).then(function (res) {
+    API.beginTest(config, config.name).then(function (res) {
       $('start-btn').disabled = false;
+      state.testFlow.sessionId = res.sessionId;
       state.lastSessionId = res.sessionId;
-      $('cap-session').textContent = res.sessionId;
-      $('cap-vs').textContent = config.vs;
-      msg($('setup-msg'), '', '');
-      showView('capture');
-      msg($('capture-msg'), 'Capture armed. Drive traffic, then Stop.', 'ok');
+      if (cyclesOn) { return beginCyclesPhase(); }
+      return startTracePhase();
     }).catch(function (e) {
       $('start-btn').disabled = false;
       msg($('setup-msg'), 'Start failed: ' + e.message, 'err');
+    });
+  }
+
+  function setCyclesMsg(text) { $('cycles-phase-msg').textContent = text || ''; }
+
+  // Step 1–2: reset the rules' stats, then either wait for the user's external
+  // load (pause + Continue) or fire the on-box load ourselves.
+  function beginCyclesPhase() {
+    var flow = state.testFlow;
+    state.testPhase = 'cycles';
+    $('cap-session').textContent = flow.sessionId;
+    $('cap-vs').textContent = flow.config.vs;
+    msg($('setup-msg'), '', '');
+    showView('capture');
+    $('cycles-phase').hidden = false;
+    $('stop-btn').disabled = true;
+    msg($('capture-msg'), '', '');
+    $('cycles-continue').disabled = true;
+    setCyclesMsg('Resetting stats for ' + flow.rules.join(', ') + '…');
+    return API.resetStats(flow.sessionId, flow.rules).then(function () {
+      if (flow.onbox) { return runOnboxLoad(); }
+      setCyclesMsg('Stats reset. Drive your high-volume load now (≥200k requests, profiler OFF), then click “Snapshot & continue”.');
+      $('cycles-continue').disabled = false;
+    }).catch(function (e) {
+      setCyclesMsg('');
+      msg($('capture-msg'), 'Reset failed: ' + e.message, 'err');
+    });
+  }
+
+  function runOnboxLoad() {
+    var o = state.testFlow.onbox;
+    setCyclesMsg('Generating ' + o.count + ' on-box requests (concurrency ' + o.concurrency + ')… this skews the measurement.');
+    return API.sendTraffic({
+      host: o.host, port: o.port, path: o.path, https: o.https,
+      count: o.count, concurrency: o.concurrency, highVolume: true
+    }).then(function (res) {
+      setCyclesMsg('Sent ' + res.sent + ' (' + res.ok + ' ok, ' + res.failed + ' failed). Snapshotting…');
+      return snapshotAndContinue();
+    }).catch(function (e) {
+      setCyclesMsg('');
+      msg($('capture-msg'), 'On-box load failed: ' + e.message, 'err');
+    });
+  }
+
+  // Step 3: snapshot the authoritative cycles, then branch to the trace phase or
+  // finalize a cycles-only run.
+  function snapshotAndContinue() {
+    var flow = state.testFlow;
+    $('cycles-continue').disabled = true;
+    setCyclesMsg('Snapshotting cycles…');
+    return API.snapshotCycles(flow.sessionId, flow.rules).then(function () {
+      $('cycles-phase').hidden = true;
+      if (flow.traceOn) { return startTracePhase(); }
+      return finalizeCyclesOnly();
+    }).catch(function (e) {
+      $('cycles-continue').disabled = false;
+      setCyclesMsg('');
+      msg($('capture-msg'), 'Snapshot failed: ' + e.message, 'err');
+    });
+  }
+
+  function finalizeCyclesOnly() {
+    var flow = state.testFlow;
+    state.testPhase = null;
+    return API.finalizeSession(flow.sessionId).then(function () {
+      msg($('capture-msg'), 'Cycles-only test finalized (session ' + flow.sessionId + '). Open it in Sessions → analyze → Stats.', 'ok');
+      showView('sessions');
+    }).catch(function (e) {
+      msg($('capture-msg'), 'Finalize failed: ' + e.message, 'err');
+    });
+  }
+
+  // Step 4–7: attach the profiler to the existing session and arm the capture.
+  // The existing Stop button + engine-state poll finalize it as before.
+  function startTracePhase() {
+    var flow = state.testFlow;
+    state.testPhase = 'trace';
+    var config = flow.config;
+    config.sessionId = flow.sessionId; // engine.start attaches instead of creating
+    msg($('setup-msg'), '', '');
+    msg($('capture-msg'), 'Starting profiler…', '');
+    showView('capture');
+    return API.startCapture(config).then(function (res) {
+      state.lastSessionId = res.sessionId;
+      $('cap-session').textContent = res.sessionId;
+      $('cap-vs').textContent = flow.config.vs;
+      msg($('capture-msg'), 'Capture armed. Drive the small profiler run (default 25), then Stop.', 'ok');
+    }).catch(function (e) {
+      msg($('capture-msg'), 'Profiler start failed: ' + e.message, 'err');
     });
   }
 
@@ -254,6 +383,23 @@
 
   function syncTrafficFormVisibility() {
     $('traffic-form').hidden = !$('traffic-enable').checked;
+  }
+
+  function syncCyclesOpts() {
+    $('cycles-opts').hidden = !$('cycles-enable').checked;
+  }
+  function syncLoadSource() {
+    $('onbox-opts').hidden = radioValue('loadSource') !== 'onbox';
+  }
+  // Hide the profiler-only fields (events/occmask/period/stopmode/publisher) for
+  // a cycles-only test. pub-select-field is governed by syncPubModeUi (which also
+  // honours the trace toggle), so refresh it here too.
+  function syncTracePhase() {
+    var on = $('trace-enable').checked;
+    Array.prototype.forEach.call(document.querySelectorAll('.trace-only'), function (elm) {
+      elm.hidden = !on;
+    });
+    syncPubModeUi();
   }
 
   function syncTrafficBodyField() {
@@ -294,6 +440,10 @@
   // state transitions. Handles auto-stop (period mode): the click handler
   // never runs, so messages must be driven from the poll.
   function onEngineStateChange(from, to) {
+    // During the cycles phase the profiler is intentionally off (engine idle);
+    // don't let the poll wipe the cycles banner or toggle the Stop button.
+    if (state.testPhase === 'cycles') { return; }
+    if (to === 'finalized') { state.testPhase = null; }
     if (to === 'capturing') {
       msg($('setup-msg'), '', '');
       msg($('capture-msg'), 'Capturing. Drive traffic, then Stop (or wait for auto-stop).', 'ok');
@@ -390,7 +540,11 @@
         analyze.addEventListener('click', function (ev) {
           ev.stopPropagation();
           API.getRaw(s.id).then(function (res) {
-            window.Analysis.loadRaw(res.raw || '', { rules: (s.config && s.config.rules) || [] });
+            window.Analysis.loadRaw(res.raw || '', {
+              rules: (s.config && s.config.rules) || [],
+              sessionId: s.id,
+              cycles: s.cycles || null
+            });
           }).catch(function (e) { window.alert('Could not load raw: ' + e.message); });
         });
         actions.appendChild(analyze);
@@ -510,7 +664,13 @@
     $('ev-none').addEventListener('click', function () { setAllEvents(false); });
     $('traffic-enable').addEventListener('change', syncTrafficFormVisibility);
     $('t-method').addEventListener('change', syncTrafficBodyField);
-    $('start-btn').addEventListener('click', startCapture);
+    $('cycles-enable').addEventListener('change', syncCyclesOpts);
+    $('trace-enable').addEventListener('change', syncTracePhase);
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="loadSource"]'), function (r) {
+      r.addEventListener('change', syncLoadSource);
+    });
+    $('cycles-continue').addEventListener('click', snapshotAndContinue);
+    $('start-btn').addEventListener('click', runTest);
     $('send-btn').addEventListener('click', sendTraffic);
     $('stop-btn').addEventListener('click', stopCapture);
     $('refresh-sessions').addEventListener('click', loadSessions);
@@ -518,6 +678,9 @@
     $('import-sessions').addEventListener('click', chooseImportFile);
     $('import-file').addEventListener('change', onImportFile);
     renderPeriodPresets();
+    syncCyclesOpts();
+    syncLoadSource();
+    syncTracePhase();
     if (window.Analysis) { window.Analysis.init(); }
     loadInventory();
     showView('setup');

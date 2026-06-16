@@ -24,7 +24,7 @@
 
 set -euo pipefail
 
-VERSION="${1:-0.3.0}"
+VERSION="${1:-0.4.1}"
 RELEASE="${2:-0001}"
 APP_NAME="rultracer"
 
@@ -153,6 +153,7 @@ exit 0
 /var/config/rest/iapps/${APP_NAME}/nodejs/lib/UiWorker.js
 /var/config/rest/iapps/${APP_NAME}/nodejs/lib/capture.js
 /var/config/rest/iapps/${APP_NAME}/nodejs/lib/configProcessor.js
+/var/config/rest/iapps/${APP_NAME}/nodejs/lib/cpustats.js
 /var/config/rest/iapps/${APP_NAME}/nodejs/lib/engine.js
 /var/config/rest/iapps/${APP_NAME}/nodejs/lib/iremote.js
 /var/config/rest/iapps/${APP_NAME}/nodejs/lib/logchain.js
@@ -171,10 +172,12 @@ exit 0
 /var/config/rest/iapps/${APP_NAME}/presentation/js/parser.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/model.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/flame.js
+/var/config/rest/iapps/${APP_NAME}/presentation/js/cycles.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/seqdiagram.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/stepthrough.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/sourcemap.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/flamegraph.js
+/var/config/rest/iapps/${APP_NAME}/presentation/js/cyclesview.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/analysis.js
 /var/config/rest/iapps/${APP_NAME}/presentation/vendor/d3.v7.min.js
 /var/config/rest/iapps/${APP_NAME}/presentation/vendor/d3-flamegraph.min.js

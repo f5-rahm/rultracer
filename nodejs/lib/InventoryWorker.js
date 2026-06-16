@@ -9,6 +9,7 @@ var iremote = require('./iremote');
 var restutil = require('./restutil');
 var validate = require('./validate');
 var logger = require('./logger');
+var cpustats = require('./cpustats');
 
 function fullName(obj) {
     if (obj.fullPath) { return obj.fullPath; }
@@ -31,7 +32,39 @@ InventoryWorker.prototype.onGet = function (restOperation) {
         this._rule(restOperation, q.rule);
         return;
     }
+    if (seg.length >= 1 && seg[0] === 'cpu') {
+        this._cpu(restOperation);
+        return;
+    }
+    if (seg.length >= 1 && seg[0] === 'rule-stats') {
+        this._ruleStats(restOperation, q.rule);
+        return;
+    }
     this._summary(restOperation);
+};
+
+// GET /inventory/cpu -> { cpuHz, cores, mhz } from /proc/cpuinfo (Phase 4).
+InventoryWorker.prototype._cpu = function (restOperation) {
+    var self = this;
+    cpustats.cpuInfo().then(function (info) {
+        restutil.ok(self, restOperation, info);
+    }).catch(function (err) {
+        logger.error('cpu info failed:', err);
+        restutil.fail(self, restOperation, err);
+    });
+};
+
+// GET /inventory/rule-stats?rule=/Common/foo -> per-event cycle stats (Phase 4).
+InventoryWorker.prototype._ruleStats = function (restOperation, ruleName) {
+    var self = this;
+    if (!ruleName) { return restutil.fail(this, restOperation, new Error('rule query parameter required')); }
+    try { validate.assertName(ruleName, 'rule'); }
+    catch (e) { return restutil.fail(this, restOperation, e); }
+    cpustats.ruleStats(ruleName).then(function (rs) {
+        restutil.ok(self, restOperation, rs);
+    }).catch(function (err) {
+        restutil.fail(self, restOperation, err);
+    });
 };
 
 InventoryWorker.prototype._summary = function (restOperation) {

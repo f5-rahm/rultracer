@@ -34,6 +34,12 @@
   window.API = {
     inventory: function () { return get('/inventory'); },
     ruleEvents: function (ruleName) { return get('/inventory/events?rule=' + encodeURIComponent(ruleName)); },
+    cpuInfo: function () { return get('/inventory/cpu'); },
+    ruleStats: function (ruleName) { return get('/inventory/rule-stats?rule=' + encodeURIComponent(ruleName)); },
+    resetStats: function (id, rules) { return post('/sessions/' + encodeURIComponent(id) + '/cycles', { action: 'reset', rules: rules }); },
+    snapshotCycles: function (id, rules) { return post('/sessions/' + encodeURIComponent(id) + '/cycles', { action: 'snapshot', rules: rules }); },
+    finalizeSession: function (id) { return post('/sessions/' + encodeURIComponent(id) + '/cycles', { action: 'finalize' }); },
+    beginTest: function (config, name) { return post('/sessions/begin', { config: config, name: name }); },
     profilerStatus: function () { return get('/profiler'); },
     startCapture: function (config) { return post('/profiler', { action: 'start', config: config }); },
     stopCapture: function () { return post('/profiler', { action: 'stop' }); },

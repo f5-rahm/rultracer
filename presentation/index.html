@@ -24,8 +24,15 @@
   <main id="app">
     <!-- SETUP -->
     <section class="view" data-view="setup">
-      <h2>Configure a capture</h2>
+      <h2>Configure a test</h2>
       <p class="warn">rule-profiler adds TMM overhead &mdash; use on a lab device only.</p>
+
+      <div class="field">
+        <label>Test phases</label>
+        <label class="cb"><input type="checkbox" id="cycles-enable"> Collect authoritative cycles (<code>ltm rule stats</code>)</label>
+        <label class="cb"><input type="checkbox" id="trace-enable" checked> Capture profiler trace</label>
+        <small>The cycles phase runs first with the profiler <strong>OFF</strong> (for accurate counters); the trace run follows. Enable either or both &mdash; the profiler-trace settings (events, occurrence types, period, publisher) appear only when <em>Capture profiler trace</em> is on.</small>
+      </div>
 
       <div class="field">
         <label for="vs">Virtual server</label>
@@ -35,10 +42,27 @@
       <div class="field">
         <label>iRules on this virtual</label>
         <div id="rules" class="checks"></div>
-        <small>Leave all unchecked to trace every rule on the virtual.</small>
+        <small>Both phases use this selection &mdash; the cycles phase reads each selected rule&rsquo;s <code>ltm rule stats</code>; the trace traces them. (Trace-only: leave all unchecked to trace every rule on the virtual.)</small>
       </div>
 
-      <div class="field">
+      <div class="field" id="cycles-opts" hidden>
+        <label>High-volume load (cycles phase)</label>
+        <label class="radio"><input type="radio" name="loadSource" value="external" checked> External &mdash; I&rsquo;ll drive &ge;200k requests myself, then continue</label>
+        <label class="radio"><input type="radio" name="loadSource" value="onbox"> Generate on-box <em>(skews the measurement)</em></label>
+        <div id="onbox-opts" hidden>
+          <div class="traffic-grid">
+            <label>VIP address <input id="hv-host" placeholder="10.1.10.50"></label>
+            <label>Port <input id="hv-port" type="number" value="80"></label>
+            <label>Path <input id="hv-path" value="/"></label>
+            <label>Requests <input id="hv-count" type="number" value="200000" min="1"></label>
+            <label>Concurrency <input id="hv-conc" type="number" value="20" min="1" max="200"></label>
+            <label class="cb"><input id="hv-https" type="checkbox"> HTTPS</label>
+          </div>
+          <small class="warn">On-box generation competes with TMM and inflates the cycles you measure &mdash; quick/dirty runs only.</small>
+        </div>
+      </div>
+
+      <div class="field trace-only">
         <label>
           Events
           <span class="bulk-actions">
@@ -51,7 +75,7 @@
         <small id="events-hint">Check at least one rule above to see its events.</small>
       </div>
 
-      <div class="field">
+      <div class="field trace-only">
         <label>
           Occurrence types <em>(explicit &mdash; nothing is selected by default)</em>
           <span class="bulk-actions">
@@ -64,7 +88,7 @@
         <small class="hint" id="bytecode-hint"></small>
       </div>
 
-      <div class="field">
+      <div class="field trace-only">
         <label>Capture period</label>
         <div class="period">
           <div id="period-presets" class="presets"></div>
@@ -72,13 +96,13 @@
         </div>
       </div>
 
-      <div class="field inline">
+      <div class="field inline trace-only">
         <label>Stop mode</label>
         <label class="radio"><input type="radio" name="stopMode" value="manual" checked> Manual (I will click Stop)</label>
         <label class="radio"><input type="radio" name="stopMode" value="period"> Auto-stop at period</label>
       </div>
 
-      <div class="field inline">
+      <div class="field inline trace-only">
         <label>Log publisher</label>
         <label class="radio"><input type="radio" name="pubMode" value="reuse" checked> Use existing</label>
         <label class="radio"><input type="radio" name="pubMode" value="create"> Use/create rultracer_pub</label>
@@ -95,7 +119,7 @@
       </div>
 
       <div class="actions">
-        <button id="start-btn" class="primary">Start capture</button>
+        <button id="start-btn" class="primary">Start test</button>
       </div>
       <div id="setup-msg" class="msg"></div>
     </section>
@@ -108,6 +132,11 @@
         <div>Session: <span id="cap-session">&mdash;</span></div>
         <div>Virtual: <span id="cap-vs">&mdash;</span></div>
         <div id="cap-timer-cell"><span id="cap-timer-label">Timer:</span> <strong id="cap-timer">&mdash;</strong></div>
+      </div>
+
+      <div id="cycles-phase" class="cycles-banner" hidden>
+        <div class="cycles-banner-text"><strong>Cycles phase</strong> &mdash; <span id="cycles-phase-msg"></span></div>
+        <button id="cycles-continue" class="primary" type="button">Snapshot &amp; continue</button>
       </div>
 
       <p class="muted">rule-profiler only emits while matching traffic flows. Drive traffic from an external
@@ -134,7 +163,7 @@
             </select>
           </label>
           <label>Host header <input id="t-hosthdr" placeholder="example.com"></label>
-          <label>Count <input id="t-count" type="number" value="5" min="1" max="100"></label>
+          <label>Count <input id="t-count" type="number" value="25" min="1" max="100"></label>
           <label class="cb"><input id="t-https" type="checkbox"> HTTPS</label>
         </div>
         <div class="field" id="t-body-field" hidden>
@@ -184,6 +213,7 @@
           <button type="button" class="an-subtab active" data-pane="sequence">Sequence</button>
           <button type="button" class="an-subtab" data-pane="flame">Flamegraph</button>
           <button type="button" class="an-subtab" data-pane="diff">Diff</button>
+        <button type="button" class="an-subtab" data-pane="stats">Stats</button>
         </nav>
 
         <div id="an-pane-sequence" class="an-pane">
@@ -347,6 +377,22 @@
             </div>
           </div>
         </div>
+
+        <div id="an-pane-stats" class="an-pane" hidden>
+          <div class="an-controls">
+            <label id="cy-rule-wrap">Rule
+              <select id="cy-rule" title="rule whose ltm rule stats to reset / snapshot"></select>
+            </label>
+            <button id="cy-reset" type="button" title="zero the rule's stat counters before a high-volume timing run">Reset stats</button>
+            <button id="cy-snapshot" type="button" class="primary" title="read CPU + ltm rule stats and store them on this session">Snapshot stats now</button>
+            <span class="spacer"></span>
+            <span id="cy-status" class="msg"></span>
+          </div>
+          <div class="pane-title">Cycles vs CPU
+            <small>authoritative cycles from <code>ltm rule stats</code> · reset → drive 100k+ conns (profiler OFF) → snapshot · %CPU vs whole-box budget</small>
+          </div>
+          <div id="cy-output" class="cy-output"></div>
+        </div>
       </div>
 
       <!-- Load dialog -->
@@ -383,10 +429,12 @@
   <script src="js/parser.js"></script>
   <script src="js/model.js"></script>
   <script src="js/flame.js"></script>
+  <script src="js/cycles.js"></script>
   <script src="js/seqdiagram.js"></script>
   <script src="js/stepthrough.js"></script>
   <script src="js/sourcemap.js"></script>
   <script src="js/flamegraph.js"></script>
+  <script src="js/cyclesview.js"></script>
   <script src="js/analysis.js"></script>
   <script src="js/app.js"></script>
 </body>

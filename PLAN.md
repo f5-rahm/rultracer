@@ -111,7 +111,7 @@ RPM via `build/build-rpm.sh` (dynamic `.spec`, noarch; `%files` = `nodejs/`, `pr
 - **Phase 1 — Capture core (v1, goals 1–2).** Helper libs (`tmsh`,`iremote`,`logchain`,`capture`,`store`); InventoryWorker; ProfilerWorker state machine (path A + flush detection + guaranteed teardown); SessionWorker + retention; TrafficWorker; Setup/Capture/Sessions SPA views; RPM build + install/uninstall. **Deliverable:** configure profiler → bounded capture → `raw.csv` + manifest → clean teardown.
 - **Phase 2 — Parse + sequence + step-through (v1, goals 3,4,6). ✅ DELIVERED v0.2.0 (tag `phase2`).** `parser.js`/`model.js` (prefix-strip, pairing, durations, NestNode — single-TMM, flow/event grouping); `seqdiagram.js` sequence diagram with crossings; `stepthrough.js` linked table+scrubber w/ variable/command replay; `sourcemap.js` best-effort annotation; grouping selector. **Deliverable:** full v1 usable debugger. *See "Phase 2 delivery & lessons" at the end of this doc for what shipped, addendums (custom SVG instead of D3, call-order lifelines, timing modes, source-coverage rework, modal loader, SVG/PNG export), and lessons learned.*
 - **Phase 3 — Flamegraph + diff (goal 5). ✅ DELIVERED v0.3.0 (tag `phase3`).** NestNode→`RPFlame` → vendored d3 + d3-flame-graph flamegraph (aggregated/literal, scope-driven) + a two-capture diff (differential/side-by-side); step-through scroll/control fixes shipped alongside. Seam: `toFolded()`. *See "Phase 3 delivery & lessons" at the end of this doc.*
-- **Phase 4 — Cycles-vs-CPU stats (goal 7).** Durations are µs deltas (no cycle field on 17.1 VE); convert µs→cycles via `/mgmt/tm/sys` CPU clock/core count and reconcile with `ltm rule stats`. Seam: InventoryWorker CPU stub.
+- **Phase 4 — Cycles-vs-CPU stats (goal 7). ✅ CODE COMPLETE v0.4.0 (headless-validated; on-box validation + tag `phase4` pending).** Reframed during clarifying Q&A: the **authoritative cycles are `ltm rule stats`** (per-event hardware counters), not the rule-profiler trace — the trace µs is overhead-inflated and serves as the per-command source + reconcile comparand. CPU budget = Σ all-core MHz × 1e6 (DevCentral "Evaluating Performance" gist convention). New **Stats** sub-tab with Reset/Snapshot orchestration (user drives the high-volume traffic), snapshot persisted into `manifest.cycles`. Seam used: `SourceMap.commandStats`-style rollup reimplemented in the pure `cycles.js`. *See "Phase 4 delivery & lessons" at the end of this doc.*
 - **Phase 5 — Reports + Mermaid export (goal 8).** Self-contained HTML + JSON/folded/CSV; wire `toMermaid()` to download. Seam: serializable model, disabled Mermaid button present.
 - **Phase 6 — Multi-TMM & trace layering (deferred from goal-7/viz; needs multi-TMM hardware).** Partition by TMM, single-TMM/interleaved/overlay views, `layers([...])`; confirm the per-TMM line tagging and `ctxId` meaning on real hardware.
 - **Phase 7 — Wrap-up / polish (optional, end of project).** Small quality-of-life adds deferred to keep earlier phases clean:
@@ -257,3 +257,113 @@ Reusable references: rulbased's worker-discovery, tmsh-via-bash, version-store, 
 - **Diff granularity.** The diff compares **whole-capture aggregated** A vs B only. Per-scope diffs (compare one event or flow across captures) are a possible future add; not needed for v1.
 - **Literal whole-capture can stack many graphs** (one per event execution across the capture — 20 for the sample session). Left intentionally uncapped; per-flow/per-event scope is the focused view and is the literal default. Capping/collapsing repeats is a possible later polish.
 - **Inline bytecode opcode hints** remain a Phase 7 polish item (the flamegraph surfaces bytecode *counts* in tooltips; per-opcode meaning still lives only in the collapsed Bytecode reference panel).
+
+---
+
+## Phase 4 delivery & lessons (v0.4.0 — code complete, on-box validation + tag `phase4` pending)
+
+> Status: **logic validated headless** (JavaScriptCore + Python arithmetic cross-check; `test/phase4.js` mirrors it for on-box Node 6.9.1). The DOM view (`cyclesview.js`) is smoke-tested for render-without-throw only — tables/badges/layout still need an on-box deploy + hard-refresh. The live REST/tmsh paths (CPU MHz, rule-stats envelope, reset-stats) are **unverified on the box** — see "Live-box unknowns" below.
+
+### The reframing (the important part)
+Clarifying Q&A flipped the data model from what the kickoff prompt assumed. The user's [iRules Runtime Calculator gist](https://gist.github.com/jasonrahm/f65b3db4280c34bbf23daaaf3b2874e0) (the DevCentral "Evaluating Performance" approach) established that:
+- **`ltm rule stats` is the authoritative cycle source** — per **event** it reports `minCycles`/`avgCycles`/`maxCycles` + `totalExecutions`, measured by TMM's own hardware counters. These are accurate ONLY under a high-volume run (100k+ connections) with the **rule-profiler OFF**, because the profiler's syslog logging inflates timings.
+- **The rule-profiler trace (µs deltas) is NOT the cycle source** — it's overhead-distorted. It remains the only **per-command** view (rule stats stop at event granularity) and the **reconcile comparand**: the gap between authoritative avgCycles and trace-derived avgCycles *is* the profiler overhead, surfaced honestly.
+- **CPU budget = Σ every core's MHz × 1e6** (whole-box), so `%CPU/request = cycles / cpuHz`, `µs = cycles × 1e6 / cpuHz`, `maxReqPerSec = cpuHz / cycles`. Matched to the gist deliberately (locked decision: "Match the gist (all-core budget)").
+
+### Locked decisions (Phase 4 Q&A)
+| Question | Decision |
+|---|---|
+| Timing-test scope | **Orchestrate only** — Reset/Snapshot buttons; the USER drives the 100k+ traffic with any load tool (ab/wrk/…). rultracer never generates the load (on-box generation would compete with TMM and skew the very cycles being measured). |
+| %CPU denominator | **Match the gist** — whole-box budget (Σ all-core MHz). |
+| Persist | **Into the manifest** — snapshot writes `manifest.cycles`, so a session (and a backup `.json`) carries its cycle data; works offline + feeds the Phase 5 report. |
+| Granularity | **Summed + avg/occurrence** per rule/event/command. |
+| Placement | **New `Stats` sub-tab** (`Sequence \| Flamegraph \| Diff \| Stats`). |
+
+### Delivered (goal 7)
+- **`presentation/js/cycles.js`** (`window.RPCycles`) — the PURE seam (no DOM/d3), Node-6.9.1-safe so `test/phase4.js` runs on-box. `parseCpuinfo`/`cpuFromMhz`, the four gist conversions (`cyclesToMicros`/`microsToCycles`/`pctCpuPerReq`/`maxReqPerSec`), `ruleStatsRows` (authoritative table per rule), `traceEventStats` + `traceCommandStats` (trace-derived rollups; commands counted by **CMD_VM** canonical to avoid the 2× CMD double-count, matching source coverage), and `reconcile` (authoritative vs trace avgCycles + overhead Δ%, surfacing trace-only events rather than dropping them).
+- **`presentation/js/cyclesview.js`** (`window.CyclesView`) — DOM view: a standing **caveat banner** (where the numbers come from, profiler-OFF requirement), per-rule **authoritative tables**, a **reconcile table** with a Δ-overhead badge (ok ≤25% / warn ≤100% / bad >100%), and a **trace-derived per-command table** (flagged overhead-inflated/relative; µs-only when no CPU snapshot yet).
+- **`nodejs/lib/cpustats.js`** (ES5, shared by both workers) — `cpuInfo()` (reads `/proc/cpuinfo` cpu MHz via `tmsh.runBash`, sums×1e6), `ruleStats(name)` (`GET /mgmt/tm/ltm/rule/<enc>/stats` → per-event), `resetStats(name)` (`tmsh reset-stats ltm rule <name>`), `snapshot(names)` (CPU + per-rule stats + `takenAt`).
+- **Worker endpoints** — `InventoryWorker`: `GET /inventory/cpu`, `GET /inventory/rule-stats?rule=`. `SessionWorker`: `POST /sessions/<id>/cycles { action:'reset'|'snapshot', rules:[...] }` (snapshot persists `manifest.cycles`). `api.js`: `cpuInfo`/`ruleStats`/`resetStats`/`snapshotCycles`.
+- **Wiring** — `analysis.js` Stats sub-tab; rule names derived from the trace's RULE/RULE_VM spans; Reset/Snapshot **enabled only for a live saved session** (`state.sessionId`) — pasted/backup traces still **display** persisted `manifest.cycles` (read-only). `app.js` passes `sessionId` + `cycles` from the session manifest into `loadRaw`.
+- **Plumbing** — version → `0.4.0` (`configProcessor.js`, `build-rpm.sh`); `cpustats.js` / `cycles.js` / `cyclesview.js` added to `%files` (macOS rpm lists every file). `test/phase4.js` (zero-dep, Node-6.9.1-safe) + Python cross-check.
+
+### Live-box unknowns to verify on first deploy (DO NOT assume)
+1. **`/proc/cpuinfo` exposes `cpu MHz` on the 17.1 VE.** Some VMs omit it or report a throttled/variable freq. Fallback if absent: `lscpu` or `/mgmt/tm/sys/hardware`. (The gist used `/proc/cpuinfo` on real hardware.)
+2. **`ltm rule stats` REST envelope + field names** — `entries[url].nestedStats.entries` with `eventType.description`, `totalExecutions/minCycles/avgCycles/maxCycles{.value}`. Confirm on the box; `parseRuleStats` skips rows without `eventType` (the rule-level aggregate).
+3. **`tmsh reset-stats ltm rule <name>`** form and that restnoded (via util/bash root) is allowed to run it.
+4. The DOM view's tables/badges/`[hidden]` behaviour — watch the recurring `[hidden]` specificity trap and the `scrollIntoView`-scrolls-window trap if the Stats tables become their own scroll box.
+
+---
+
+## Phase 4.1 — the coupled "Run Test" workflow (v0.4.1 — CODE COMPLETE, on-box validation pending)
+
+> Status: **code complete as v0.4.1, headless syntax-validated, NOT yet committed/tagged or on-box validated.** Phase 4 shipped the cycles *primitives* (reset / snapshot / rule-stats / CPU facts) and a Stats view, but as **three disconnected manual actions** — and the Stats tab was a dead end because its Reset/Snapshot buttons require a live `state.sessionId` that only exists *after* a profiler capture. Phase 4.1 sequences cycles collection and profiler capture into one guided test. The design below records the locked decisions; the **Implemented** subsection at the end records what shipped.
+
+### The reframe (corrects a Phase 4 assumption)
+Phase 4 treated authoritative-cycles collection and profiler-trace capture as **independent** flows. They are not — they are **two ordered phases of one test**, and the order is a *correctness constraint*, not a preference:
+
+> `ltm rule stats` are authoritative ONLY when measured with the rule-profiler **OFF** (the profiler's syslog logging inflates the counters). Therefore the cycles window (reset → load → snapshot) must complete **before** the profiler is ever enabled. Snapshotting after a profiler run contaminates the authoritative number.
+
+The profiler run that follows is a *small* run whose trace is the per-command view and the reconcile comparand — never the authoritative cycle source.
+
+### The canonical 8-step sequence
+1. **Reset** the rule-under-test stats (`cpustats.resetStats`) — zeroes the counters, scoping the window.
+2. **High-volume load** (≈200k requests, profiler OFF) — see *Load generation* below.
+3. **Snapshot** authoritative cycles (`cpustats.snapshot` → `manifest.cycles`) — CPU facts + per-event rule stats.
+4. **Enable** the rule-profiler (`engine.start`).
+5. **Small run** (default 25 connections, user-configurable) to populate the trace.
+6. **Disable** the rule-profiler (`engine.stop`).
+7. **Collect** the profiler logs (`engine.stop` already reads `/var/log/ltm`, extracts, writes raw).
+8. **Finalize** the session for analysis (already done by `engine.stop`).
+
+Steps 1+3 are the **cycles phase**; steps 4–7 are the **trace phase**. A test may run **either phase alone or both** (locked: "either as an option or both together").
+
+### Architecture decision — browser-orchestrated, session created up front
+- **The browser drives the sequence** by calling existing endpoints in order. Rejected a server-side state machine: the external-load pause (step 2) would force the server into an "awaiting-load" waiting-state plus a "continue" signal endpoint — i.e. reinventing browser coordination with extra server state and indefinite timers. The pause is trivial in the UI (it just sits between snapshot and profiler-start until the user clicks **Continue**).
+- **Safety net stays server-side.** `CaptureEngine`'s `safetyMaxMs` timer + startup orphan-sweep already guarantee the profiler is torn down even if the tab closes mid-run — so browser orchestration is crash-safe.
+- **The session is created at step 1, not step 4.** This is the key wiring fix. Today `engine.start` calls `store.createSession`; for the coupled flow the session must exist *before* the cycles phase so the early snapshot persists into it (losing a 200k-request snapshot to a tab reload is unacceptable, so we persist early rather than holding it in browser memory). `engine.start` gains an optional `cfg.sessionId`: when present it **attaches** to that session instead of creating one. Both phases then write into one manifest.
+
+### UX — one "Run Test" panel with two toggles
+- ☑ **Authoritative cycles** (reset → *[load]* → snapshot)
+- ☑ **Profiler trace** (enable → N conns → disable → collect)
+
+Both on = full 8 steps; either alone = that half. On Start the session shell is created; the Stats tab then reads its live data path (finally non-empty). Pasted/backup traces keep displaying persisted `manifest.cycles` read-only, as today.
+
+### Load generation — per-run choice (locked decision)
+The high-volume load source is chosen **per run**:
+- **External + pause/confirm (default).** rultracer never generates it. After reset, the UI pauses with load instructions; the user drives ab/wrk/etc. off-box, then clicks **Continue** to snapshot. Matches the original "orchestrate only" decision and keeps the measurement clean (on-box generation competes with TMM and inflates the cycles being measured).
+- **On-box generation (explicit override).** For quick/dirty runs where purity doesn't matter, allow rultracer to fire the load itself. **Open work this requires** (do not assume the current `TrafficWorker` suffices): (a) the **100-request cap** must be raised/parameterized for a high-volume mode; (b) `TrafficWorker` currently fires **serially** (recursive `fire()`), so 200k serial requests would be unusably slow — a high-volume mode needs bounded concurrency; (c) surface a standing **skew warning** in the UI whenever this mode feeds an authoritative snapshot.
+- The **small profiler run** (step 5, default 25) always uses the built-in `TrafficWorker` (well under the 100 cap) regardless of the high-volume choice.
+
+### Required changes (contained)
+- `engine.start`: accept optional `cfg.sessionId` → attach instead of create; manifest status lifecycle gains a pre-profiler phase (e.g. `measuring`).
+- A way to create the session shell at step 1 (reuse `store.createSession` via a `SessionWorker` POST, or a thin "begin test" call) and to run `reset`/`snapshot` against it (the `/cycles` endpoints already key by session id).
+- `TrafficWorker`: high-volume mode (raised/parameterized cap + bounded concurrency); keep the ≤100 serial path for the small run.
+- SPA: the Run-Test orchestrator (sequence + pause/confirm + two toggles), the small-run count prompt (default 25), and wiring the Stats tab to the live session.
+
+### Deferred / open
+- Manifest shape for carrying both `cycles` and trace in one session is already partly there (`manifest.cycles` + raw); confirm the combined-run manifest needs no new top-level fields beyond a test-config record.
+- Whether to re-reset/re-snapshot is **out** — the single pre-profiler snapshot is the authoritative one by construction.
+- This is **Phase 4.1**; it does not change the Phase 5 (reports + Mermaid) ordering — reports consume whatever `manifest.cycles` + trace a coupled run produces.
+
+### Implemented (v0.4.1)
+- **`engine.start` attaches** — accepts optional `cfg.sessionId`; when present it `updateManifest`s the existing shell to `configuring` instead of `createSession`, so the pre-profiler snapshot lands in the same manifest the trace finalizes.
+- **`SessionWorker`** — `POST /sessions/begin { config, name }` creates the shell in status `measuring` and returns `{ sessionId }`; `POST /sessions/<id>/cycles { action:'finalize' }` marks a cycles-only run `finalized` (handled before the rules guard since it needs no rule list).
+- **`TrafficWorker`** — `highVolume` mode raises the cap (100 → 1,000,000) and fires with bounded concurrency (default 20, clamp [1,200]) via a `pump()`/`fireOne()` runner, returning an aggregate `{ sent, ok, failed, statuses }` summary; the default ≤100 **serial** path (and its per-request `results[]`) is unchanged for the small profiler run.
+- **`api.js`** — `beginTest`, `finalizeSession`; `sendTraffic` already passes `highVolume`/`concurrency` through.
+- **SPA orchestrator (`app.js`)** — `runTest()` replaces `startCapture()`: validate → `beginTest` → (cycles: `reset` → external pause+**Continue** or on-box `sendTraffic` → `snapshot`) → (trace: `startCapture` with `sessionId` → existing Stop/poll finalizes; else `finalize`). New `state.testPhase`/`state.testFlow`; the engine-state poll early-returns during the `cycles` phase so it can't wipe the banner or toggle Stop. The small profiler-run default is **25** (`t-count`).
+- **Markup/CSS** — Setup gains **Test phases** (cycles / trace toggles) + **High-volume load** (external default / on-box override with VIP+count+concurrency + skew warning); Capture gains the `#cycles-phase` pause banner. `.cycles-banner` sets `display:flex` so it carries an explicit `[hidden]{display:none}` (the recurring specificity trap); `#cycles-opts`/`#onbox-opts` hide safely because `.field` sets no `display`.
+- **Plumbing** — version → `0.4.1` (`configProcessor.js`, `build-rpm.sh`). No new files, so `%files` is unchanged.
+
+### Implemented follow-on (Setup restructure + whole-VS aggregate)
+- **Setup reordered mode-first** — **Test phases** moved to the top; **VS + iRules stay always-visible** (both phases need the rule selection — cycles reads each rule's `ltm rule stats`). The profiler-only fields (Events, Occurrence types, Capture period, Stop mode, Log publisher) carry a `trace-only` class and hide for a cycles-only test via `syncTracePhase()`; `syncPubModeUi` now also honours the trace toggle (pub-select + its no-publisher warning suppressed when trace is off). `.trace-only[hidden]{display:none}` re-asserts over `.field.inline`'s `display:flex` (the recurring specificity trap). Header/labels reworded ("Configure a test").
+- **Max req/s is now per-request only (conceptual fix).** req/s is inherently a *per-request* metric — a request runs *every* event, so its cost is the **sum** of the per-event cycles, and `max req/s = clock ÷ Σ avg cost` (e.g. CLIENT_ACCEPTED 9,082 + HTTP_REQUEST 38,309 = 47,391 cyc → 194K/s). A per-event req/s ("if the box did only this event") is a hypothetical that never happens and reads *higher* than the real combined limit — which is exactly why the total looked smaller than its parts (additive serial cost: total throughput is below even the slowest event, like painting+drying stages). So the view now shows req/s **only on the Total / request row** (and the aggregate card); per-event cells show `—`, with a sub-line explaining why. (Earlier interim step had unified everything on `avgReqPerSec`, but per-event req/s is misleading regardless, so it's omitted.)
+- **Stats table styling** — full cell-divider grid (`border` on every `th`/`td`) and centered header labels; the `cy-total` divider uses the accent colour.
+- **Whole-VS aggregate** — the Stats page already renders **per-rule** Authoritative + Reconcile tables (and a per-rule "Total / request" row); it now also shows a **headline aggregate** when ≥2 rules are snapshotted. `RPCycles.aggregate(ruleStats, cpuHz)` (pure, tested in `test/phase4.js`) sums each rule's per-request cost (Σ avgCycles across its events) into whole-VS cycles/µs/%CPU/max-req-s plus each rule's share. **Flat sum** — assumes each event fires once per representative request; the caveat is printed in the section sub-line (execution-weighted is a deferred follow-on, the data's already in the snapshot).
+
+### On-box validation checklist (v0.4.1, do FIRST)
+1. **Trace-only** run still works end-to-end (the unified `beginTest`→attach path must match old behaviour); session lists + analyzes as before.
+2. **Cycles-only, external** — reset → pause banner → drive load → Continue → snapshot → finalize; session shows in Sessions, analyze → Stats shows authoritative numbers, other panes empty/gracefully handle no raw.
+3. **Cycles + trace, external** — both phases in one session; Stats + Sequence/Flamegraph all populated; reconcile table compares authoritative vs trace.
+4. **On-box high-volume** — small count first (e.g. 500) to confirm the `pump()` concurrency runner terminates and returns the summary; watch restnoded memory under larger counts.
+5. The `[hidden]` behaviour of `#cycles-opts`/`#onbox-opts`/`#cycles-phase` (toggle each), and that the cycles-phase poll-gating doesn't strand the Stop button.
