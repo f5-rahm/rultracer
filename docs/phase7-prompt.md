@@ -1,14 +1,27 @@
 # Phase 7 kickoff prompt — Wrap-up / polish (final phase)
 
-Paste this into a fresh session to start Phase 7. The repo should be clean at tag `phase6`, v0.6.0 (Phase 6 multi-TMM shipped).
+Paste this into a fresh session to start Phase 7. The repo should be clean at tag `phase7-docs`, **v0.7.0** (the Phase 7 docs pass already shipped — see "Already done this session" below; the A–G code backlog is what's left).
 
 > Phase 7 is the **optional end-of-project polish** phase from PLAN.md — small quality-of-life adds deliberately deferred to keep Phases 1–6 clean. It is **not** a single feature; it's a menu. Pick with me which items to do (and in what order) before building. All 8 goals are already delivered; this is refinement, not new scope.
 
 ---
 
+## Already done this session (Phase 7 docs pass — tag `phase7-docs`, commit `6240ce8`)
+
+A docs-only slice of Phase 7 is **already committed** (not on the A–G list — it was its own thing). Don't redo it:
+
+- **Version bumped `0.6.0` → `0.7.0`** in `nodejs/lib/configProcessor.js` and `build/build-rpm.sh` (default). No further bump needed for the rest of Phase 7 — stay on `0.7.0` and just bump the **release** number per on-box iteration.
+- **README rewritten** — capability-grouped "Primary features", three screenshots (`docs/images/rultracer_{sequence,flamegraph,cpu_cycles}.png`), a single published **SSH install path** (first-time `install-onbox.sh` bootstrap + steady-state iteration; GUI/raw-REST + future iControl-REST demoted to a note), and a corrected "Runtime constraints" section (uid 198 + `util/bash`-as-root for writes, `iremote` GET-only for reads — the old text had this backwards).
+- **`docs/ARCHITECTURE.md` added** — distilled 3-layer map (on-box RestWorkers + helpers with REST paths, browser pure seams vs view modules, capture lifecycle, conventions). Use it as the quick orientation doc; PLAN.md stays the exhaustive design.
+- The tag is `phase7-docs`, **not** `phase7` — that name is left free for when the A–G code below lands.
+
+**Out of scope / queued separately:** a proxy-free **iControl-REST-only deploy** flow (the Rulbased-style `package-management-tasks` upload+install) is something the user wants to validate on a clean box — it's tracked in the auto-memory, *not* part of the A–G backlog. The current published install path is SSH + `install-onbox.sh`.
+
+---
+
 Start Phase 7 of rultracer: **wrap-up / polish (PLAN.md Phase 7)**.
 
-Before writing code, review context: read `PLAN.md` (esp. the **Phase 7** line in the phased plan, and every **"Deferred (later phases)"** subsection at the ends of the Phase 3 / 5 / 6 delivery write-ups — that's where the backlog lives), the auto-loaded memory (`project_phase6-implemented` has the latest module map + the headless-validation workflow), and `git show phase6`. Then **ask me which polish items to tackle** before building, and bump to **0.7.0** (or `0.6.x` if we agree the changes are minor enough). My usual flow: clarify/confirm scope first, then code.
+Before writing code, review context: read `PLAN.md` (esp. the **Phase 7** line in the phased plan, and every **"Deferred (later phases)"** subsection at the ends of the Phase 3 / 5 / 6 delivery write-ups — that's where the backlog lives), `docs/ARCHITECTURE.md` (quick 3-layer orientation), the auto-loaded memory (`project_phase6-implemented` has the latest module map + the headless-validation workflow), and `git show phase7-docs`. Then **ask me which polish items to tackle** before building. **Version is already at `0.7.0`** — no bump needed; just bump the **release** number per on-box iteration. My usual flow: clarify/confirm scope first, then code.
 
 **Hard constraints / lessons carried from Phases 2–6 (unchanged):**
 - **No Node/JS runtime on the dev Mac.** Validate pure logic headless with `osascript -l JavaScript` (JavaScriptCore, ES6) using stubbed `window`/`document`, plus a Python cross-check of any arithmetic. Keep test-harness-exercised pure seams **Node-6.9.1-safe** (no optional chaining / nullish / `**` / arrow in shipped pure seams) so `node test/phaseN.js` runs on-box; add a `test/phase7.js` if a new pure seam appears.
@@ -33,7 +46,7 @@ Before writing code, review context: read `PLAN.md` (esp. the **Phase 7** line i
 
 **E. Whole-capture Mermaid.** Mermaid stays a single-slice export by design (no time-proportional spacing, no free-form crossing arrows). Revisit only if a coarse whole-capture Mermaid is genuinely wanted; the SVG already handles whole-capture detail.
 
-**F. Cleanup pass.** A separate, ready-to-run housekeeping prompt lives at **`docs/cleanup-prompt.md`** (dead code, consistency, the brand-new-box `mkdir -p /shared/rultracer && chown restnoded: …` preflight note, etc.). Can fold into Phase 7 or run standalone.
+**F. Cleanup pass.** A separate, ready-to-run housekeeping prompt lives at **`docs/cleanup-prompt.md`** (dead code, consistency, etc.). Can fold into Phase 7 or run standalone. *Note: the brand-new-box `/shared/rultracer` preflight that used to be listed here is resolved — both `install-onbox.sh` and `post-install.sh` already `mkdir -p` + `chown` the data tree, and the one genuine first-time step (scp'ing `install-onbox.sh` itself, since it's not in the RPM) is now documented in the README. So this item is just `docs/cleanup-prompt.md` now.*
 
 **G. Anything that accrued during on-box validation** of Phases 4–6 (those were committed with on-box validation left as the user's call — if anything surfaced, fix it here).
 
