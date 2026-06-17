@@ -24,7 +24,7 @@
 
 set -euo pipefail
 
-VERSION="${1:-0.6.0}"
+VERSION="${1:-0.7.0}"
 RELEASE="${2:-0002}"
 APP_NAME="rultracer"
 
