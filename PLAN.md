@@ -112,7 +112,7 @@ RPM via `build/build-rpm.sh` (dynamic `.spec`, noarch; `%files` = `nodejs/`, `pr
 - **Phase 2 — Parse + sequence + step-through (v1, goals 3,4,6). ✅ DELIVERED v0.2.0 (tag `phase2`).** `parser.js`/`model.js` (prefix-strip, pairing, durations, NestNode — single-TMM, flow/event grouping); `seqdiagram.js` sequence diagram with crossings; `stepthrough.js` linked table+scrubber w/ variable/command replay; `sourcemap.js` best-effort annotation; grouping selector. **Deliverable:** full v1 usable debugger. *See "Phase 2 delivery & lessons" at the end of this doc for what shipped, addendums (custom SVG instead of D3, call-order lifelines, timing modes, source-coverage rework, modal loader, SVG/PNG export), and lessons learned.*
 - **Phase 3 — Flamegraph + diff (goal 5). ✅ DELIVERED v0.3.0 (tag `phase3`).** NestNode→`RPFlame` → vendored d3 + d3-flame-graph flamegraph (aggregated/literal, scope-driven) + a two-capture diff (differential/side-by-side); step-through scroll/control fixes shipped alongside. Seam: `toFolded()`. *See "Phase 3 delivery & lessons" at the end of this doc.*
 - **Phase 4 — Cycles-vs-CPU stats (goal 7). ✅ CODE COMPLETE v0.4.0 (headless-validated; on-box validation + tag `phase4` pending).** Reframed during clarifying Q&A: the **authoritative cycles are `ltm rule stats`** (per-event hardware counters), not the rule-profiler trace — the trace µs is overhead-inflated and serves as the per-command source + reconcile comparand. CPU budget = Σ all-core MHz × 1e6 (DevCentral "Evaluating Performance" gist convention). New **Stats** sub-tab with Reset/Snapshot orchestration (user drives the high-volume traffic), snapshot persisted into `manifest.cycles`. Seam used: `SourceMap.commandStats`-style rollup reimplemented in the pure `cycles.js`. *See "Phase 4 delivery & lessons" at the end of this doc.*
-- **Phase 5 — Reports + Mermaid export (goal 8).** Self-contained HTML + JSON/folded/CSV; wire `toMermaid()` to download. Seam: serializable model, disabled Mermaid button present.
+- **Phase 5 — Reports + Mermaid export (goal 8). ✅ DELIVERED v0.5.0 (tag `phase5`, on-box validation pending).** Self-contained HTML report (chooser: scope + panel checkboxes) with a hand-rolled static icicle SVG (no d3), the existing self-contained sequence SVG, and the reused Stats/Source DOM; JSON data export; enriched Mermaid (activations, TMM/VM boxes, autonumber, per-event cycle notes). Folded stacks already shipped in Phase 3. New pure seam `reportdata.js`. *See "Phase 5 delivery & lessons" at the end of this doc.*
 - **Phase 6 — Multi-TMM & trace layering (deferred from goal-7/viz; needs multi-TMM hardware).** Partition by TMM, single-TMM/interleaved/overlay views, `layers([...])`; confirm the per-TMM line tagging and `ctxId` meaning on real hardware.
 - **Phase 7 — Wrap-up / polish (optional, end of project).** Small quality-of-life adds deferred to keep earlier phases clean:
   - **Inline bytecode opcode hints** — hover tooltip (and/or opt-in verbose label) on each bytecode tick mapping the mnemonic to its meaning (`push1` → "push a literal", etc.), reusing the opcode table already in the collapsed "Bytecode reference" panel. Kept off-screen for now by request; promote to inline if desired.
@@ -367,3 +367,47 @@ The high-volume load source is chosen **per run**:
 3. **Cycles + trace, external** — both phases in one session; Stats + Sequence/Flamegraph all populated; reconcile table compares authoritative vs trace.
 4. **On-box high-volume** — small count first (e.g. 500) to confirm the `pump()` concurrency runner terminates and returns the summary; watch restnoded memory under larger counts.
 5. The `[hidden]` behaviour of `#cycles-opts`/`#onbox-opts`/`#cycles-phase` (toggle each), and that the cycles-phase poll-gating doesn't strand the Stop button.
+
+---
+
+## Phase 5 delivery & lessons (v0.5.0, tag `phase5` — on-box validation pending)
+
+> Status: **logic validated headless** (JavaScriptCore via `osascript` + a Python cross-check of the icicle width math; `test/phase5.js` mirrors it for on-box Node 6.9.1). The visual/serialization aspects (serialized SVG fonts/`xmlns`, Blob sizing on large traces, the modal `[hidden]` toggle, inlined-CSS fidelity) still need an on-box deploy + hard-refresh.
+
+### Clarifying Q&A (locked decisions, drove the build)
+| Question | Decision |
+|---|---|
+| Report scope | **Chooser at export time** — whole capture vs a specific flow/event. |
+| Panels | **Checkbox chooser** — Sequence / Flamegraph / Stats / Source coverage. |
+| Flamegraph in the offline report | **Hand-roll a static icicle SVG** from the `RPFlame` seam (no d3) — fully self-contained, dodges the live-d3 computed-styles/font/`xmlns` gotcha. Interactive zoom is intentionally dropped for the static artifact. |
+| Formats shipped | **Self-contained HTML + JSON + enriched Mermaid.** CSV is **out** for v1; **folded** stacks already shipped in Phase 3 and stay as-is. |
+| Entry point | An **Export report…** button in the Analysis top bar (where the model + cycles are loaded), opening the chooser modal. |
+
+### Delivered (goal 8)
+- **`presentation/js/reportdata.js`** (`window.RPReportData`) — the PURE seam (no DOM/d3/fetch), strict **ES5/Node-6.9.1-safe** so `test/phase5.js` runs on-box. Four functions: `flameSvg(tree,opts)` (static icicle, CSS embedded in a `<style>`, `<title>` hover text, domain colours), `mermaid(unit,opts)` (the enriched diagram), `toJSON(o)` (structured export string), `htmlDoc(o)` (assembles the final self-contained HTML, escapes the JSON island).
+- **Enriched Mermaid** — `autonumber`, activation bars (`->>+`/`-->>-`), `box` grouping TMM vs TCL VM, per-return self-µs labels, and a per-event `Note over` carrying authoritative cycles when a snapshot exists. Stays a **single flow/event slice** (Mermaid's sweet spot); the SVG export keeps the time/crossing detail Mermaid can't render. Replaced the old minimal arrow list in `analysis.js`.
+- **`analysis.js` wiring** — the Export-report modal (format + scope + panel checkboxes); HTML generation **fetches `css/app.css`** for fidelity, renders the live `SeqDiagram` / `CyclesView` / `SourceMap` **off-screen** and lifts their markup, then stitches via `RPReportData`. The button enables once a trace loads (incl. cycles-only sessions). Pasted/backup traces export too (Stats read-only from `manifest.cycles`).
+- **Plumbing** — version → `0.5.0`; `reportdata.js` added to `%files` (macOS rpm lists every file) and the index.html script tag (before `analysis.js`); `test/phase5.js` (zero-dep, Node-6.9.1-safe) + Python cross-check.
+
+### Lessons learned / decisions
+- **Reuse live DOM by rendering off-screen, don't re-author it.** Stats and Source coverage already have polished DOM renderers (`CyclesView`, `SourceMap`); the report parks a container at `left:-99999px` with an **explicit width** (so the responsive renderers size correctly), renders into it, lifts `innerHTML`, and discards it. Zero divergence, no duplicated rendering logic. The off-screen host **must have real layout** — a `display:none` or detached node would give the responsive code a 0-width pane.
+- **Inline `app.css` (fetched) for the reused DOM; embed per-SVG CSS for the visuals.** The sequence/flamegraph SVGs each carry their own `<style>` so they're self-contained regardless; the Stats/Source HTML relies on app.css, so the report fetches and inlines it (one async dependency, always available because UiWorker serves it). This keeps the report in sync with the app automatically.
+- **A static icicle beats serializing live d3.** Hand-rolling the SVG from the pure `RPFlame` tree (the same `seqdiagram` self-contained pattern) sidesteps every live-d3 export gotcha (computed styles vs stylesheet, web-font availability, missing `xmlns`) and drops the 280 KB d3 from the artifact. The only cost is losing interactive zoom — acceptable for a shareable file.
+- **Mermaid `box` groups must be contiguous in participant-declaration order.** Call order is TMM→VM→TMM (Command is TMM again after the VM hop), so Command gets its **own second TMM box** rather than trying to put it in a non-contiguous TMM group. Two TMM boxes is fine and preserves the left-to-right call order.
+- **Strip the XML PI before embedding an SVG inline.** `seqdiagram._exportSvgString()` prepends `<?xml …?>`, which is invalid inside an HTML body — the report strips it.
+- **Escape `</script>` in the JSON data island** (`<\/script>`), or the embedded JSON terminates the script element early.
+- **Whole-capture scope has no single sequence diagram** (it's inherently one flow/event slice). For `scope = whole`, the report renders the **on-screen selected unit** labelled "(representative slice)"; Stats/flamegraph/source aggregate cleanly at whole-capture. Cycles-only sessions (empty model, no selected unit) skip the sequence panel gracefully.
+- **Pure/DOM split = headless coverage.** `flameSvg`/`mermaid`/`toJSON`/`htmlDoc` are pure string/object builders (geometry, enrichment, escaping, assembly — all tested under JSC + the Python width cross-check); only the off-screen stitching + app.css fetch are browser-only and deferred to on-box eyes. Same constraint as Phases 2–4.
+
+### On-box validation checklist (v0.5.0, do FIRST)
+1. **HTML report opens fully offline** — generate it, then open the downloaded file with **no running iApp / no network**: the static icicle SVG renders with the right fonts/`xmlns`, the embedded sequence SVG renders, and the Stats/Source tables keep their styling from the inlined app.css.
+2. **Scope + panel chooser** — whole vs a specific flow/event changes the diagram + flamegraph; unchecking panels omits them; JSON format produces valid `.json`.
+3. **Pasted/backup + cycles-only traces** — export works without a live session (Stats from persisted `manifest.cycles`; cycles-only sessions omit the sequence panel without erroring).
+4. **Large-trace Blob sizing** — a big capture's report downloads without truncation/limits (and the embedded JSON island doesn't bloat it unusably).
+5. **Enriched `.mmd`** renders in a Mermaid viewer (boxes, activations, autonumber, per-event cycle notes).
+6. The `[hidden]` toggle on `#rep-dialog`/`#rep-panels` (the recurring CSS-specificity trap) and the JSON-format dimming of `#rep-panels`.
+
+### Deferred (later phases)
+- **CSV rollups** — out of v1 (HTML + JSON + Mermaid shipped). The per-command/per-event data is already in the cycles seam if wanted later.
+- **Whole-capture Mermaid** — Mermaid stays a single-slice export; the SVG handles the whole-capture detail.
+- **Per-event execution-weighted aggregate in the report** — inherits the Phase 4.1 flat-sum caveat (data's in the snapshot).

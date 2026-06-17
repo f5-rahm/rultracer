@@ -205,6 +205,7 @@
       <div class="an-top">
         <h2>Analyze a trace</h2>
         <button id="an-load-open" type="button" class="primary">Load trace&hellip;</button>
+        <button id="an-report" type="button" disabled title="export a self-contained HTML / JSON report of this session">Export report&hellip;</button>
         <span id="an-status" class="msg"></span>
       </div>
 
@@ -420,6 +421,37 @@
           </div>
         </div>
       </div>
+
+      <!-- Export report dialog (Phase 5) -->
+      <div id="rep-dialog" class="modal" hidden>
+        <div class="modal-card">
+          <div class="modal-head"><span>Export report</span><button id="rep-close" class="modal-x" type="button" aria-label="close">&times;</button></div>
+          <div class="modal-body">
+            <label class="modal-label">Format
+              <select id="rep-format">
+                <option value="html">Self-contained HTML (visuals + tables, opens offline)</option>
+                <option value="json">JSON data (records + cycles + summary)</option>
+              </select>
+            </label>
+            <label class="modal-label">Scope
+              <select id="rep-scope" title="applies to the sequence diagram and flamegraph; Stats &amp; Source coverage are always whole-capture"></select>
+            </label>
+            <div id="rep-panels">
+              <div class="modal-label">Panels (HTML report)</div>
+              <label class="cb"><input type="checkbox" id="rep-p-seq" checked> Sequence diagram</label>
+              <label class="cb"><input type="checkbox" id="rep-p-flame" checked> Flamegraph</label>
+              <label class="cb"><input type="checkbox" id="rep-p-stats" checked> Cycles vs CPU (Stats)</label>
+              <label class="cb"><input type="checkbox" id="rep-p-source" checked> Source coverage</label>
+            </div>
+            <p class="modal-hint">Scope applies to the diagram &amp; flamegraph; Stats and Source coverage always cover the whole capture. The JSON data island is embedded in the HTML too.</p>
+            <div id="rep-msg" class="msg"></div>
+          </div>
+          <div class="modal-foot">
+            <button id="rep-cancel" type="button">Cancel</button>
+            <button id="rep-generate" type="button" class="primary">Generate</button>
+          </div>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -435,6 +467,7 @@
   <script src="js/sourcemap.js"></script>
   <script src="js/flamegraph.js"></script>
   <script src="js/cyclesview.js"></script>
+  <script src="js/reportdata.js"></script>
   <script src="js/analysis.js"></script>
   <script src="js/app.js"></script>
 </body>
