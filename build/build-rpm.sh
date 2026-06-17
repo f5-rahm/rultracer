@@ -24,7 +24,7 @@
 
 set -euo pipefail
 
-VERSION="${1:-0.5.0}"
+VERSION="${1:-0.6.0}"
 RELEASE="${2:-0002}"
 APP_NAME="rultracer"
 
@@ -58,6 +58,7 @@ cp "$SRC_DIR/presentation/index.html" "$STAGE/presentation/"
 cp "$SRC_DIR/presentation/css/"*.css  "$STAGE/presentation/css/"
 cp "$SRC_DIR/presentation/js/"*.js    "$STAGE/presentation/js/"
 cp "$SRC_DIR/presentation/fixtures/"*.txt "$STAGE/presentation/fixtures/"
+cp "$SRC_DIR/presentation/fixtures/"*.csv "$STAGE/presentation/fixtures/"
 cp "$SRC_DIR/presentation/vendor/"*    "$STAGE/presentation/vendor/"
 
 cp "$SRC_DIR/build/post-install.sh" "$STAGE/build/"
@@ -171,6 +172,7 @@ exit 0
 /var/config/rest/iapps/${APP_NAME}/presentation/js/app.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/parser.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/model.js
+/var/config/rest/iapps/${APP_NAME}/presentation/js/tmm.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/flame.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/cycles.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/seqdiagram.js
@@ -186,6 +188,7 @@ exit 0
 /var/config/rest/iapps/${APP_NAME}/presentation/vendor/LICENSES.md
 /var/config/rest/iapps/${APP_NAME}/presentation/fixtures/example-logs.txt
 /var/config/rest/iapps/${APP_NAME}/presentation/fixtures/example-irule.txt
+/var/config/rest/iapps/${APP_NAME}/presentation/fixtures/example-multitmm.csv
 %attr(0755, -, -) /var/config/rest/iapps/${APP_NAME}/build/post-install.sh
 SPEC
 

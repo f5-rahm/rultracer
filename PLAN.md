@@ -113,7 +113,7 @@ RPM via `build/build-rpm.sh` (dynamic `.spec`, noarch; `%files` = `nodejs/`, `pr
 - **Phase 3 — Flamegraph + diff (goal 5). ✅ DELIVERED v0.3.0 (tag `phase3`).** NestNode→`RPFlame` → vendored d3 + d3-flame-graph flamegraph (aggregated/literal, scope-driven) + a two-capture diff (differential/side-by-side); step-through scroll/control fixes shipped alongside. Seam: `toFolded()`. *See "Phase 3 delivery & lessons" at the end of this doc.*
 - **Phase 4 — Cycles-vs-CPU stats (goal 7). ✅ CODE COMPLETE v0.4.0 (headless-validated; on-box validation + tag `phase4` pending).** Reframed during clarifying Q&A: the **authoritative cycles are `ltm rule stats`** (per-event hardware counters), not the rule-profiler trace — the trace µs is overhead-inflated and serves as the per-command source + reconcile comparand. CPU budget = Σ all-core MHz × 1e6 (DevCentral "Evaluating Performance" gist convention). New **Stats** sub-tab with Reset/Snapshot orchestration (user drives the high-volume traffic), snapshot persisted into `manifest.cycles`. Seam used: `SourceMap.commandStats`-style rollup reimplemented in the pure `cycles.js`. *See "Phase 4 delivery & lessons" at the end of this doc.*
 - **Phase 5 — Reports + Mermaid export (goal 8). ✅ DELIVERED v0.5.0 (tag `phase5`, on-box validation pending).** Self-contained HTML report (chooser: scope + panel checkboxes) with a hand-rolled static icicle SVG (no d3), the existing self-contained sequence SVG, and the reused Stats/Source DOM; JSON data export; enriched Mermaid (activations, TMM/VM boxes, autonumber, per-event cycle notes). Folded stacks already shipped in Phase 3. New pure seam `reportdata.js`. *See "Phase 5 delivery & lessons" at the end of this doc.*
-- **Phase 6 — Multi-TMM & trace layering (deferred from goal-7/viz; needs multi-TMM hardware).** Partition by TMM, single-TMM/interleaved/overlay views, `layers([...])`; confirm the per-TMM line tagging and `ctxId` meaning on real hardware.
+- **Phase 6 — Multi-TMM & trace layering (deferred from goal-7/viz). ✅ CODE COMPLETE v0.6.0 (headless-validated against the 4-TMM fixture; on-box validation + tag `phase6` pending).** Pure `RPTmm.partition` seam (by `ctxId`, TMM 0..N by sort); TMM scope dropdown (single-TMM default / interleaved) scoping the flow/event grouping; interleaved flow badges; diff-TMM overlay reusing the Phase 3 diff; report TMM chooser; bundled 4-TMM example. Stats stays whole-box. The `tmmN[pid]` prefix / trailing-field questions remain deferred to real multi-blade hardware. *See "Phase 6 delivery & lessons" at the end of this doc.*
 - **Phase 7 — Wrap-up / polish (optional, end of project).** Small quality-of-life adds deferred to keep earlier phases clean:
   - **Inline bytecode opcode hints** — hover tooltip (and/or opt-in verbose label) on each bytecode tick mapping the mnemonic to its meaning (`push1` → "push a literal", etc.), reusing the opcode table already in the collapsed "Bytecode reference" panel. Kept off-screen for now by request; promote to inline if desired.
   - Other deferred polish as it accrues.
@@ -411,3 +411,36 @@ The high-volume load source is chosen **per run**:
 - **CSV rollups** — out of v1 (HTML + JSON + Mermaid shipped). The per-command/per-event data is already in the cycles seam if wanted later.
 - **Whole-capture Mermaid** — Mermaid stays a single-slice export; the SVG handles the whole-capture detail.
 - **Per-event execution-weighted aggregate in the report** — inherits the Phase 4.1 flat-sum caveat (data's in the snapshot).
+
+---
+
+## Phase 6 delivery & lessons (v0.6.0 — code complete, on-box validation + tag `phase6` pending)
+
+> Status: **logic validated headless** (JavaScriptCore + Python cross-check against the real 4-TMM fixture; `test/phase6.js` mirrors it for on-box Node 6.9.1). The DOM wiring (TMM scope dropdown, flow badges, diff-TMM overlay, report TMM chooser) is browser-only and needs an on-box deploy + hard-refresh per the Phase 2–5 lesson. On-box validation + commit/tag are the user's call.
+
+### Ground truth confirmed (re-verified this phase)
+The bundled fixture `background info/rultracer-solo_test_4-raw.csv` (4,525 occurrences, all 12-field) holds **4 ctxIds `11313`/`11670`/`11673`/`11674`** (main thread == pid 11313 sorts lowest → TMM 0) across **141 flows**, balanced **35/33/36/37**, with **0 flows spanning two ctxIds**. So the locked design holds: partition by `ctxId`, label `TMM 0..N` by ascending sort, flows pin to one TMM.
+
+### Delivered (the multi-TMM / trace-layering deferral)
+- **`presentation/js/tmm.js`** (`window.RPTmm`) — the PURE seam, ES5/Node-6.9.1-safe. `partition(records)` → TMM list `{ctxId,index,label,records,flowCount,occCount}` sorted ascending; `flowTmmMap(tmms)` → `flowId→'TMM n'` for badging; `cmpCtx`. The parser/model are untouched — `RPModel.build` just consumes a partition's record subset, staying TMM-agnostic underneath.
+- **TMM scope selector** (`an-tmm`, next to *Group by*) — **separate dropdown that scopes the flow/event grouping**, not a third grouping axis (keeps "which TMM" orthogonal to "how to group within it"). Options: each `TMM n · k flow(s)` (raw ctxId + occ count on hover) + **All TMMs (interleaved)**. **Hidden for single-TMM captures** → existing sessions behave byte-identically. Default = **single-TMM (first TMM)** per the locked decision; switching rebuilds a memoised per-scope model and re-renders Sequence/Flamegraph/Source/trace dropdown.
+- **Interleaved view badges flows with their TMM** (`· TMM n`) in the trace dropdown so a flow's owner is visible when all TMMs are shown.
+- **Stats stays whole-box** (locked) — authoritative `ltm rule stats` + CPU budget are whole-box hardware counters, so the rule list and the trace-derived rollup read `wholeModel()` regardless of the in-view TMM.
+- **Diff = trace layering/overlay** — reused the Phase 3 diff machinery (NOT a new view): a `diff-tmm-row` (shown only when multi-TMM) picks **A vs B TMMs of the current capture**; each TMM's aggregated forest feeds the existing differential / side-by-side flamegraph. Baseline A is a TMM-scoped model override (`state.diffAModel`); a cross-capture *Load comparison…* clears it.
+- **Report TMM chooser** (`rep-tmm`) — defaults to the in-view TMM; like the Scope dropdown it scopes **only the diagram + flamegraph** (Stats/Source/JSON stay whole-capture). Header gains a TMMs row; section titles get the TMM suffix.
+- **Bundled 4-TMM example** — fixture promoted to `presentation/fixtures/example-multitmm.csv` with a **Load 4-TMM example** button in the load modal (works for baseline A and comparison B); added to `build-rpm.sh` staging (`*.csv`) + `%files`.
+- **Plumbing** — version → `0.6.0` (`configProcessor.js`, `build-rpm.sh` default, report `REPORT_VERSION`); `tmm.js` script tag + `%files`; `[hidden]` re-asserted for the new `.an-controls[hidden]` (diff row) and `.modal-label[hidden]` (report TMM) — the recurring specificity trap. `test/phase6.js` (zero-dep, Node-6.9.1-safe) + Python cross-check.
+
+### Addendums / deviations
+- **Per-scope model cache** rather than rebuilding on every switch: `modelForScope('all' | ctxId)` memoises `RPModel.build`. `'all'` == the whole capture == today's behavior, so a single-TMM capture's `'all'` and its lone-TMM scope are the same cached object.
+- **`flowGroup`/`eventGroup`/`scopeUnit`/`scopeRoots` gained an optional model param** so the report can target a TMM-scoped model while the live flamegraph keeps using `state.model`. `scopeRoots(val)` now delegates to `scopeRootsOf(model,val)`.
+
+### Still deferred to real multi-blade hardware (separate `tmm` processes)
+The fixture is a VE where the 4 TMMs are **threads of one process**. Unconfirmed on multi-blade: whether the syslog prefix becomes `tmmN[pid]:` (the parser's `PREFIX_RE` already matches both), whether a trailing 13th CSV field appears, and the per-TMM start "alert" text. The partition is keyed on `ctxId` today; a future build can swap the key source to the prefix without touching callers.
+
+### On-box validation checklist (v0.6.0, do FIRST)
+1. **Single-TMM capture unchanged** — the `an-tmm` dropdown stays hidden; Sequence/Flame/Diff/Stats/report behave exactly as v0.5.0.
+2. **4-TMM example** — Load 4-TMM example → dropdown shows TMM 0–3 (+ All); default lands on TMM 0; switching re-renders the diagram/flame/source; All interleaves with `· TMM n` flow badges.
+3. **Diff overlay** — multi-TMM shows the overlay row; *Compare TMMs* renders B-vs-A differential and side-by-side; *Load comparison…* still works and resets baseline A.
+4. **Report TMM chooser** — appears only for multi-TMM; scopes diagram + flamegraph; Stats/Source/JSON stay whole-capture; header shows the TMM row.
+5. The recurring **`[hidden]` specificity** trap on `#an-tmm-wrap` / `.diff-tmm-row` / `#rep-tmm-wrap`.
