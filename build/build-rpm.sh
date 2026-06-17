@@ -25,7 +25,7 @@
 set -euo pipefail
 
 VERSION="${1:-0.5.0}"
-RELEASE="${2:-0001}"
+RELEASE="${2:-0002}"
 APP_NAME="rultracer"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

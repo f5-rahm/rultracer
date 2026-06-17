@@ -570,22 +570,55 @@
     d.innerHTML = 'Loading...';
     API.getSession(id).then(function (res) {
       d.innerHTML = '';
-      var raw = el('span', { class: 'link', text: 'view raw occurrences' });
-      raw.addEventListener('click', function () { showRaw(id, d); });
       d.appendChild(el('h3', { text: res.session.name || id }));
-      d.appendChild(raw);
+      // A dedicated raw host so re-clicking "view" REPLACES the output instead
+      // of appending a fresh copy each time (the old bug).
+      var rawHost = el('div', { class: 'raw-host' });
+      var actions = el('div', { class: 'raw-actions' });
+      var view = el('span', { class: 'link', text: 'view raw occurrences' });
+      view.addEventListener('click', function () { showRaw(id, rawHost); });
+      var exp = el('span', { class: 'link', text: 'export raw occurrences' });
+      exp.addEventListener('click', function () { exportRaw(id, res.session.name); });
+      actions.appendChild(view);
+      actions.appendChild(document.createTextNode(' · '));
+      actions.appendChild(exp);
+      d.appendChild(actions);
+      d.appendChild(rawHost);
       d.appendChild(el('pre', { text: JSON.stringify(res.session, null, 2) }));
     }).catch(function (e) { d.textContent = 'Error: ' + e.message; });
   }
 
-  function showRaw(id, container) {
+  // Render the full raw.csv into `host`, clearing it first so repeated clicks
+  // replace rather than accumulate. No line cap — the <pre> scrolls (.raw-pre).
+  function showRaw(id, host) {
+    host.innerHTML = '';
+    host.appendChild(el('div', { class: 'muted', text: 'Loading raw…' }));
     API.getRaw(id).then(function (res) {
+      host.innerHTML = '';
       var lines = (res.raw || '').split('\n').filter(Boolean);
-      var preview = lines.slice(0, 60).join('\n');
-      var pre = el('pre', { text: preview + (lines.length > 60 ? '\n... (' + lines.length + ' lines total)' : '') });
-      container.appendChild(el('h3', { text: 'Raw occurrences (' + lines.length + ')' }));
-      container.appendChild(pre);
-    }).catch(function (e) { container.appendChild(el('div', { text: 'Raw error: ' + e.message })); });
+      host.appendChild(el('h3', { text: 'Raw occurrences (' + lines.length + ')' }));
+      host.appendChild(el('pre', { class: 'raw-pre', text: lines.join('\n') || '(empty)' }));
+    }).catch(function (e) {
+      host.innerHTML = '';
+      host.appendChild(el('div', { text: 'Raw error: ' + e.message }));
+    });
+  }
+
+  // Download a session's full raw.csv (handy for grabbing fixtures / analysing
+  // multi-TMM captures off-box).
+  function exportRaw(id, name) {
+    API.getRaw(id).then(function (res) {
+      var safe = String(name || id).replace(/[^\w.-]+/g, '_');
+      downloadBlob(new Blob([res.raw || ''], { type: 'text/csv' }), 'rultracer-' + safe + '-raw.csv');
+    }).catch(function (e) { window.alert('Export raw failed: ' + e.message); });
+  }
+
+  function downloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   function deleteSession(id) {

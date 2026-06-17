@@ -360,3 +360,9 @@ table.cy-table tbody tr:hover { background: var(--panel); }
 .cy-badge.bad { background: var(--accent2); color: #fff; }
 .an-controls #cy-reset, .an-controls #cy-snapshot { padding: 6px 12px; }
 .an-controls button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ---- Sessions: raw occurrences viewer -------------------------------- */
+.raw-actions { margin: 8px 0; }
+.raw-host:empty { display: none; }
+.raw-pre { max-height: 50vh; overflow: auto; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px; font: 12px/1.4 monospace; white-space: pre; }
