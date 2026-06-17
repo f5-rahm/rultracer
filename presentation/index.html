@@ -356,6 +356,7 @@
             <span class="diff-vs">vs</span>
             <span class="diff-compare">Comparison <strong>B</strong>: <span id="diff-b-name" class="muted">none loaded</span></span>
             <button id="diff-load-b" type="button" class="primary">Load comparison&hellip;</button>
+            <button id="diff-clear" type="button" title="clear comparison B and return to the aggregate baseline" disabled>Clear</button>
             <span class="spacer"></span>
             <label id="diff-mode-wrap">View
               <select id="diff-mode">
@@ -364,13 +365,6 @@
               </select>
             </label>
             <button id="diff-reset" type="button" title="reset zoom">Reset zoom</button>
-          </div>
-          <div id="diff-tmm-row" class="an-controls diff-tmm-row" hidden>
-            <span class="diff-tmm-lead">Overlay two TMMs of this capture:</span>
-            <label>A <select id="diff-tmm-a"></select></label>
-            <span class="diff-vs">vs</span>
-            <label>B <select id="diff-tmm-b"></select></label>
-            <button id="diff-tmm-apply" type="button" class="primary" title="aggregate each TMM's forest and diff B against A">Compare TMMs</button>
           </div>
           <div class="pane-title">Diff
             <small>Δ self time B−A · <span class="diff-key diff-slower">red = slower in B</span> · <span class="diff-key diff-faster">blue = faster in B</span></small>
@@ -415,6 +409,12 @@
               <button id="an-load-example" type="button">Load bundled example</button>
               <button id="an-load-mtmm" type="button" title="4-TMM concurrent-load capture (141 flows across 4 worker threads)">Load 4-TMM example</button>
               <label class="filebtn">Choose file&hellip;<input type="file" id="an-file" accept=".csv,.txt,.json,.log" hidden></label>
+            </div>
+            <div id="an-saved" class="an-saved" hidden>
+              <label class="modal-label" id="an-saved-label">&hellip;or load a saved session on this box
+                <select id="an-saved-select"></select>
+              </label>
+              <button id="an-saved-load" type="button" class="primary">Load selected</button>
             </div>
             <p class="modal-hint">A raw rule-profiler capture / <code>raw.csv</code> (syslog-prefixed or stripped), or a <code>rultracer-sessions-*.json</code> backup.</p>
             <div id="an-session-pick" hidden>

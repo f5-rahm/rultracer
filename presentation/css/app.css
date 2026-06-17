@@ -133,13 +133,9 @@ table.sessions tr.clickable:hover { background: var(--panel); cursor: pointer; }
 .an-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin: 14px 0 12px; }
 .an-controls label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
-/* [hidden] must beat the inline-flex above (same trap as the Phase 2 .modal[hidden] bug). */
+/* [hidden] must beat the inline-flex above (same trap as the Phase 2 .modal[hidden] bug).
+   Covers the Phase 6 TMM scope (#an-tmm-wrap) and diff B-scope (#diff-bscope-wrap) labels. */
 .an-controls label[hidden] { display: none; }
-/* the Phase 6 TMM overlay row toggles via the hidden attribute on an .an-controls
-   element, which sets display:flex — re-assert [hidden] at higher specificity. */
-.an-controls[hidden] { display: none; }
-.diff-tmm-row { font-size: 13px; }
-.diff-tmm-lead { color: var(--muted); }
 .an-controls select { min-width: 0; padding: 5px 8px; font-size: 13px; }
 .an-controls #an-trace { min-width: 220px; max-width: 360px; }
 .an-controls .spacer { flex: 1; }
@@ -269,6 +265,12 @@ table.step-table td.val { white-space: pre; }
 /* the report TMM chooser (rep-tmm-wrap, a .modal-label) is hidden for single-TMM
    captures; display:block above beats the UA [hidden] rule, so re-assert it. */
 .modal-label[hidden] { display: none; }
+/* saved-session picker in the load dialog: select grows, Load button hugs right. */
+.an-saved { display: flex; align-items: flex-end; gap: 8px; margin: 12px 0 0; }
+.an-saved .modal-label { flex: 1; margin: 0; }
+.an-saved select { width: 100%; }
+/* display:flex above beats the UA [hidden] rule (recurring trap) — re-assert. */
+.an-saved[hidden] { display: none; }
 #an-raw { width: 100%; background: var(--bg); color: var(--fg);
   border: 1px solid var(--border); border-radius: 6px; padding: 8px; font: 12px/1.4 monospace; }
 #an-session-select { width: 100%; }
