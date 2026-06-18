@@ -68,6 +68,7 @@ headless-testable) and DOM/view modules.
 | Module | Role | Test |
 |--------|------|------|
 | **parser.js** | Parse rule-profiler CSV (syslog-prefixed or raw) into occurrence records (`tsMicros`, `base`, `kind`, `lifeline`, `domain`, `flowId`, `ctxId`, …). | phase2 |
+| **opcodes.js** | Tcl bytecode opcode→meaning table; single source for the "Bytecode reference" panel and the seq-diagram tick hover tooltips. | phase7 |
 | **model.js** | ENTRY/EXIT pairing into a `NestNode` forest per `flowId`; duration math (raw, sum-of-children, real exec time); unmatched-span detection. | phase2 |
 | **flame.js** | NestNode forest → flamegraph shape (`{name, value, children}`), literal per-flow or aggregated by call path; folded-stack export. | phase3 |
 | **cycles.js** | CPU facts + cycle↔µs conversions; per-event authoritative (`ltm rule stats`) vs trace-derived stats; %CPU and req/sec derivations. | phase4 |
@@ -123,8 +124,11 @@ headless-testable) and DOM/view modules.
   parses the trace — `parser`/`model` and everything downstream are browser-only.
   This keeps the ES5 worker surface small and lets analysis iterate without a redeploy.
 - **Pure seams are Node-6.9.1-safe** so `node test/phaseN.js` runs both on a dev
-  box (headless) and on the BIG-IP. Avoid optional chaining / nullish / `**` /
-  arrows in shipped pure seams.
+  box (headless) and on the BIG-IP. Node 6.9.1 (V8 5.1) has `const`/`let`/arrow/
+  `for-of`/template-literals, but **not** `**`, optional chaining (`?.`), nullish
+  (`??`), or async/await — avoid those in shipped pure seams. Some newer seams
+  (`tmm.js`, `opcodes.js`) stay `var`/`function`-only by choice; that's extra
+  conservatism, not a requirement (`parser.js`/`model.js` use arrows + `const`).
 - **Persistent data is under `/shared/rultracer/`**, not the iApps package dir —
   the iApps LX framework wipes `/var/config/rest/iapps/<pkg>/` on every install.
 - **The RPM `%files` list is explicit** — adding a presentation module or fixture

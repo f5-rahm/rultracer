@@ -12,6 +12,12 @@ var NAME_RE = /^[A-Za-z0-9_.\-\/:]+$/;
 var EVENT_RE = /^[A-Z][A-Z0-9_]*$/;
 // allowed rule-profiler occurrence types
 var OCC_TYPES = ['event', 'rule', 'rule-vm', 'cmd-vm', 'cmd', 'var-mod', 'bytecode'];
+// Session ids become a single filesystem path component (<dataDir>/sessions/<id>/),
+// so they must contain no separators and no dots (which blocks `..` traversal).
+// store.genId() emits "<ms>-<hex4>"; this charset covers that. NOTE: do NOT reuse
+// isValidName here — NAME_RE allows '/' and '.' for tmsh partition paths, which
+// would let "../../x" through.
+var SESSION_ID_RE = /^[A-Za-z0-9_-]+$/;
 
 function isValidName(s) {
     return typeof s === 'string' && s.length > 0 && s.length <= 255 && NAME_RE.test(s);
@@ -31,6 +37,17 @@ function isValidEvent(s) {
 function assertEvent(s) {
     if (!isValidEvent(s)) {
         throw new Error('invalid iRule event name: ' + JSON.stringify(s));
+    }
+    return s;
+}
+
+function isValidSessionId(s) {
+    return typeof s === 'string' && s.length > 0 && s.length <= 128 && SESSION_ID_RE.test(s);
+}
+
+function assertSessionId(s) {
+    if (!isValidSessionId(s)) {
+        throw new Error('invalid session id: ' + JSON.stringify(s));
     }
     return s;
 }
@@ -61,6 +78,8 @@ module.exports = {
     OCC_TYPES: OCC_TYPES,
     isValidName: isValidName,
     assertName: assertName,
+    isValidSessionId: isValidSessionId,
+    assertSessionId: assertSessionId,
     isValidEvent: isValidEvent,
     assertEvent: assertEvent,
     isValidOcc: isValidOcc,

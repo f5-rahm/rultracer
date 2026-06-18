@@ -314,6 +314,12 @@
       g.appendChild(svg('path', { d: 'M' + x + ',' + y + ' h16 v8 h-16', class: 'seq-loop', 'marker-end': 'url(#arrowOpen)' }));
       const label = r.base === 'VAR_MOD' ? ('set ' + (r.varName || '') + ' = ' + (r.varValue || '')) : ('bytecode ' + r.value);
       g.appendChild(svg('text', { x: x + 22, y: y + 8, class: 'seq-label ' + (r.base === 'VAR_MOD' ? 'var' : 'bc') }, [t(label)]));
+      // Hover tooltip mapping the bytecode mnemonic to its meaning (same opcode
+      // table as the collapsed "Bytecode reference" panel). Native SVG <title>.
+      if (r.base !== 'VAR_MOD' && window.RPOpcodes) {
+        const tip = window.RPOpcodes.tip(r.value);
+        if (tip) { g.appendChild(svg('title', null, [t(tip)])); }
+      }
       g.appendChild(this._hit(y, r.i));
       return g;
     }

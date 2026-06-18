@@ -46,7 +46,7 @@ Before writing code, review context: read `PLAN.md` (esp. the **Phase 7** line i
 
 **E. Whole-capture Mermaid.** Mermaid stays a single-slice export by design (no time-proportional spacing, no free-form crossing arrows). Revisit only if a coarse whole-capture Mermaid is genuinely wanted; the SVG already handles whole-capture detail.
 
-**F. Cleanup pass.** A separate, ready-to-run housekeeping prompt lives at **`docs/cleanup-prompt.md`** (dead code, consistency, etc.). Can fold into Phase 7 or run standalone. *Note: the brand-new-box `/shared/rultracer` preflight that used to be listed here is resolved — both `install-onbox.sh` and `post-install.sh` already `mkdir -p` + `chown` the data tree, and the one genuine first-time step (scp'ing `install-onbox.sh` itself, since it's not in the RPM) is now documented in the README. So this item is just `docs/cleanup-prompt.md` now.*
+**F. Cleanup pass.** A separate, ready-to-run housekeeping prompt lives at **`docs/history/cleanup-prompt.md`** (dead code, consistency, etc.). Can fold into Phase 7 or run standalone. *Note: the brand-new-box `/shared/rultracer` preflight that used to be listed here is resolved — both `install-onbox.sh` and `post-install.sh` already `mkdir -p` + `chown` the data tree, and the one genuine first-time step (scp'ing `install-onbox.sh` itself, since it's not in the RPM) is now documented in the README. So this item is just `docs/cleanup-prompt.md` now.*
 
 **G. Anything that accrued during on-box validation** of Phases 4–6 (those were committed with on-box validation left as the user's call — if anything surfaced, fix it here).
 

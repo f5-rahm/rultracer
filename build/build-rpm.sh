@@ -24,7 +24,7 @@
 
 set -euo pipefail
 
-VERSION="${1:-0.7.0}"
+VERSION="${1:-0.7.1}"
 RELEASE="${2:-0002}"
 APP_NAME="rultracer"
 
@@ -171,6 +171,7 @@ exit 0
 /var/config/rest/iapps/${APP_NAME}/presentation/js/api.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/app.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/parser.js
+/var/config/rest/iapps/${APP_NAME}/presentation/js/opcodes.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/model.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/tmm.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/flame.js

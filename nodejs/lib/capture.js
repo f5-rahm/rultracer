@@ -49,6 +49,13 @@ function currentSize(filePath) {
 // Resolves { text, endOffset, rotated, lineCount }.
 function readFrom(filePath, startOffset) {
     filePath = filePath || LTM_LOG;
+    // filePath is interpolated into a root bash script below. It is always the
+    // LTM_LOG constant today, but assert a safe absolute path (no shell
+    // metacharacters / quotes) so a future caller can never turn this into a
+    // root command injection. Combined with the single-quoting in the script.
+    if (!/^\/[A-Za-z0-9_./-]+$/.test(filePath)) {
+        return Promise.reject(new Error('unsafe log path: ' + JSON.stringify(filePath)));
+    }
     var token = 'rultracer_' + String(Date.now()) + '_' + Math.floor(Math.random() * 100000);
     var scriptFile = '/var/tmp/' + token + '.sh';
     var dataFile = '/var/tmp/' + token + '.raw';
@@ -66,13 +73,13 @@ function readFrom(filePath, startOffset) {
         // -E sees them as escaped brackets.
         var script =
             '#!/bin/sh\n' +
-            'tail -c +' + tailFrom + ' ' + filePath +
-                " | grep -E 'tmm[0-9]*\\[[0-9]+\\]: [0-9]+,RP_' > " + dataFile + ' 2>/dev/null\n' +
-            'chown restnoded:restnoded ' + dataFile + ' 2>/dev/null\n' +
-            'chmod 0644 ' + dataFile + '\n';
+            'tail -c +' + tailFrom + " '" + filePath + "'" +
+                " | grep -E 'tmm[0-9]*\\[[0-9]+\\]: [0-9]+,RP_' > '" + dataFile + "' 2>/dev/null\n" +
+            "chown restnoded:restnoded '" + dataFile + "' 2>/dev/null\n" +
+            "chmod 0644 '" + dataFile + "'\n";
 
         return util.pWriteFile(scriptFile, script)
-            .then(function () { return tmsh.runBash('sh ' + scriptFile); })
+            .then(function () { return tmsh.runBash("sh '" + scriptFile + "'"); })
             .then(function () { return util.readFileOrNull(dataFile); })
             .then(function (text) {
                 util.pUnlink(scriptFile).then(function () {}, function () {});

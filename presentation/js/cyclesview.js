@@ -21,7 +21,6 @@
     if (attrs) {
       Object.keys(attrs).forEach(function (k) {
         if (k === 'text') { n.textContent = attrs[k]; }
-        else if (k === 'html') { n.innerHTML = attrs[k]; }
         else if (k === 'class') { n.className = attrs[k]; }
         else { n.setAttribute(k, attrs[k]); }
       });

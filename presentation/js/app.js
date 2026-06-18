@@ -32,7 +32,6 @@
     var n = document.createElement(tag);
     if (attrs) { Object.keys(attrs).forEach(function (k) {
       if (k === 'text') { n.textContent = attrs[k]; }
-      else if (k === 'html') { n.innerHTML = attrs[k]; }
       else { n.setAttribute(k, attrs[k]); }
     }); }
     (children || []).forEach(function (c) { n.appendChild(c); });
@@ -533,7 +532,10 @@
         tr.appendChild(el('td', { text: s.name || s.id }));
         tr.appendChild(el('td', { text: (s.createdAt || '').replace('T', ' ').replace(/\..*/, '') }));
         tr.appendChild(el('td', { text: (s.config && s.config.vs) || '' }));
-        tr.appendChild(el('td', { html: '<span class="badge ' + (s.status || '') + '">' + (s.status || '') + '</span>' }));
+        // Status badge built via setAttribute(class)+textContent so a session
+        // status (attacker-controllable through an imported backup) can never
+        // inject markup. See ARCHITECTURE / the security pass.
+        tr.appendChild(el('td', {}, [el('span', { class: 'badge ' + (s.status || ''), text: s.status || '' })]));
         tr.appendChild(el('td', { text: String(cap.lineCount != null ? cap.lineCount : '') }));
         var actions = el('td');
         var analyze = el('span', { class: 'link', text: 'analyze' });
@@ -683,6 +685,25 @@
   }
 
   // ---- wire up --------------------------------------------------------------
+  // Populate the collapsed "Bytecode reference" panel from the shared opcode
+  // table (window.RPOpcodes) so the panel and the seq-diagram tick tooltips
+  // never drift apart.
+  function renderBytecodeTable() {
+    var body = $('bc-table-body');
+    if (!body || !window.RPOpcodes) { return; }
+    body.innerHTML = '';
+    window.RPOpcodes.table.forEach(function (row) {
+      var tr = document.createElement('tr');
+      var op = document.createElement('td');
+      op.textContent = row.op;
+      var meaning = document.createElement('td');
+      meaning.innerHTML = row.meaning;
+      tr.appendChild(op);
+      tr.appendChild(meaning);
+      body.appendChild(tr);
+    });
+  }
+
   function init() {
     Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (t) {
       t.addEventListener('click', function () { showView(t.dataset.view); });
@@ -711,6 +732,7 @@
     $('import-sessions').addEventListener('click', chooseImportFile);
     $('import-file').addEventListener('change', onImportFile);
     renderPeriodPresets();
+    renderBytecodeTable();
     syncCyclesOpts();
     syncLoadSource();
     syncTracePhase();

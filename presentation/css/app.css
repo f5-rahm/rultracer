@@ -9,8 +9,28 @@
   --ok: #3fb950;
   --warn: #d6a13b;
   --border: #2d3b4a;
+  /* TMM vs TCL-VM domain palette (the seq-diagram/flamegraph embedded stylesheets
+     keep their own copies so SVG exports stay self-contained — see ARCHITECTURE). */
+  --tmm: #14b8a6;
+  --tmm-soft: #2dd4bf;
+  --vm: #ea580c;
+  --vm-soft: #fb923c;
+  --cross: #7c3aed;
+  /* Dark text for use on top of the bright --ok/--warn/--accent fills. */
+  --on-ok: #06210d;
+  --on-warn: #261c05;
+  --on-accent: #04222f;
+  /* RGB channels of the brand colors, for low-opacity tint backgrounds via the
+     rgba( channels , alpha ) form — broader BIG-IP-WebKit support than color-mix(). */
+  --ok-rgb: 63, 185, 80;
+  --accent-rgb: 45, 167, 223;
+  --warn-rgb: 214, 161, 59;
 }
 * { box-sizing: border-box; }
+/* The UA `[hidden]{display:none}` loses to any author `display` rule, so assert
+   it once here with !important instead of re-stating `.x[hidden]{display:none}`
+   per component (the recurring specificity trap from Phases 2–6). */
+[hidden] { display: none !important; }
 body {
   margin: 0;
   font: 14px/1.5 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
@@ -35,9 +55,9 @@ body {
   margin-left: auto; font-size: 12px; padding: 4px 10px; border-radius: 12px;
   background: var(--panel2); color: var(--muted); text-transform: uppercase; letter-spacing: .5px;
 }
-.engine-state.capturing { background: var(--ok); color: #06210d; }
+.engine-state.capturing { background: var(--ok); color: var(--on-ok); }
 .engine-state.error { background: var(--accent2); color: #fff; }
-.engine-state.flushing, .engine-state.stopping, .engine-state.configuring { background: var(--warn); color: #261c05; }
+.engine-state.flushing, .engine-state.stopping, .engine-state.configuring { background: var(--warn); color: var(--on-warn); }
 
 main { padding: 24px 18px 64px; }
 /* Form views stay narrow + centered; the Analysis view goes full width. */
@@ -59,9 +79,6 @@ h2 { margin-top: 0; }
 .link-btn:hover { text-decoration: underline; border: 0; }
 .field.inline { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .field.inline > label:first-child { margin: 0; }
-/* Trace-only fields are hidden in a cycles-only test. `.field.inline` sets
-   display:flex, so re-assert [hidden] at higher specificity (the recurring trap). */
-.trace-only[hidden] { display: none; }
 small { color: var(--muted); display: block; margin-top: 4px; }
 small.hint { color: var(--warn); }
 .muted { color: var(--muted); }
@@ -87,8 +104,10 @@ button {
   padding: 9px 18px; border-radius: 6px; cursor: pointer; font-size: 14px;
 }
 button:hover { border-color: var(--accent); }
-button.primary { background: var(--accent); border-color: var(--accent); color: #04222f; font-weight: 600; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 button:disabled { opacity: .5; cursor: not-allowed; }
+/* Compact button — used by the Analysis toolbar / sub-tab action buttons. */
+.btn-sm { padding: 6px 12px; font-size: 13px; }
 
 .msg { min-height: 20px; margin-top: 10px; font-size: 13px; }
 .msg.err { color: var(--accent2); }
@@ -106,22 +125,30 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   border: 1px solid var(--border); border-radius: 6px; padding: 8px; font: 12px/1.4 monospace; }
 .cb-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); margin-top: 6px; }
 
-/* Phase 4.1 cycles-phase banner on the Capture view. Sets display:flex, so the
-   [hidden] attribute must be re-asserted to beat it (the recurring trap). */
+/* Phase 4.1 cycles-phase banner on the Capture view. */
 .cycles-banner { display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
   margin: 14px 0; padding: 12px 14px; border: 1px solid var(--accent2);
   border-radius: 6px; background: var(--panel); }
-.cycles-banner[hidden] { display: none; }
 .cycles-banner-text { flex: 1; min-width: 240px; }
 
-table.sessions { width: 100%; border-collapse: collapse; margin-top: 12px; }
+/* Shared data-table base — every table collapses its borders and uses a muted,
+   uppercase header. Per-table rules below add width, fonts, cell borders, sticky
+   headers, number alignment, etc. */
+.sessions, .step-table, .cy-table, .sp-vartbl, .bc-table { border-collapse: collapse; }
+.sessions th, .step-table th, .cy-table th, .bc-table th { color: var(--muted); text-transform: uppercase; }
+
+table.sessions { width: 100%; margin-top: 12px; }
 table.sessions th, table.sessions td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
-table.sessions th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+table.sessions th { font-weight: 600; font-size: 12px; }
 table.sessions tr.clickable:hover { background: var(--panel); cursor: pointer; }
-.badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; background: var(--panel2); }
-.badge.finalized { background: var(--ok); color: #06210d; }
-.badge.capturing { background: var(--warn); color: #261c05; }
-.badge.error { background: var(--accent2); color: #fff; }
+/* Status pills — the session-list `.badge` and the Stats `.cy-badge` share the
+   same color states; only their base padding/weight differs. */
+.badge, .cy-badge { border-radius: 10px; font-size: 11px; }
+.badge { padding: 2px 8px; background: var(--panel2); }
+.cy-badge { display: inline-block; padding: 1px 7px; font-weight: 600; }
+.badge.finalized, .cy-badge.ok { background: var(--ok); color: var(--on-ok); }
+.badge.capturing, .cy-badge.warn { background: var(--warn); color: var(--on-warn); }
+.badge.error, .cy-badge.bad { background: var(--accent2); color: #fff; }
 .detail { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-top: 16px; }
 .detail pre { background: var(--bg); padding: 12px; border-radius: 6px; overflow: auto; max-height: 320px; font-size: 12px; }
 .link { color: var(--accent); cursor: pointer; }
@@ -133,21 +160,20 @@ table.sessions tr.clickable:hover { background: var(--panel); cursor: pointer; }
 .an-controls { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin: 14px 0 12px; }
 .an-controls label { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
-/* [hidden] must beat the inline-flex above (same trap as the Phase 2 .modal[hidden] bug).
-   Covers the Phase 6 TMM scope (#an-tmm-wrap) and diff B-scope (#diff-bscope-wrap) labels. */
-.an-controls label[hidden] { display: none; }
 .an-controls select { min-width: 0; padding: 5px 8px; font-size: 13px; }
 .an-controls #an-trace { min-width: 220px; max-width: 360px; }
 .an-controls .spacer { flex: 1; }
 .an-controls .zoom { display: inline-flex; gap: 4px; }
 .an-controls .zoom button { padding: 4px 10px; font-size: 14px; }
-.an-controls #an-export-svg, .an-controls #an-export-png, .an-controls #an-mermaid { padding: 6px 12px; font-size: 13px; }
 
 .legend { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-.legend .lg { width: 12px; height: 12px; border-radius: 3px; display: inline-block; margin-left: 8px; }
-.legend .lg-tmm { background: #14b8a6; }
-.legend .lg-vm { background: #ea580c; }
-.legend .lg-cross { background: #7c3aed; }
+/* Legend color swatches — shared 12px box for both the seq-diagram legend
+   (.lg*) and the source-coverage legend (.smlg*); each adds its own margins. */
+.legend .lg, .smlg { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.legend .lg { margin-left: 8px; }
+.legend .lg-tmm { background: var(--tmm); }
+.legend .lg-vm { background: var(--vm); }
+.legend .lg-cross { background: var(--cross); }
 
 .an-grid { display: grid; grid-template-columns: 3fr 1fr; gap: 12px; align-items: start; }
 .pane-title { font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted);
@@ -169,16 +195,16 @@ table.sessions tr.clickable:hover { background: var(--panel); cursor: pointer; }
 .sp-head { font-weight: 600; margin-bottom: 8px; word-break: break-word; }
 .sp-sub { font-size: 11px; text-transform: uppercase; color: var(--muted); margin: 8px 0 4px; }
 .sp-empty { color: var(--muted); font-style: italic; }
-.sp-vartbl { width: 100%; border-collapse: collapse; }
+.sp-vartbl { width: 100%; }
 .sp-vartbl td { padding: 2px 6px; border-bottom: 1px solid var(--border); }
 .sp-vartbl .vn { color: var(--accent); font-family: monospace; }
 .sp-vartbl .vv { font-family: monospace; word-break: break-all; }
-.sp-vartbl tr.just-set { background: rgba(63,185,80,.14); }
+.sp-vartbl tr.just-set { background: rgba(var(--ok-rgb), .14); }
 .sp-note { color: var(--muted); font-size: 11px; margin-top: 6px; }
 .step-table-wrap { max-height: 40vh; overflow: auto; border: 1px solid var(--border); border-radius: 6px; }
-table.step-table { width: 100%; border-collapse: collapse; font: 11px/1.3 monospace; }
-table.step-table th { position: sticky; top: 0; background: var(--panel); color: var(--muted);
-  text-align: left; padding: 5px 6px; font-size: 10px; text-transform: uppercase; cursor: help; }
+table.step-table { width: 100%; font: 11px/1.3 monospace; }
+table.step-table th { position: sticky; top: 0; background: var(--panel);
+  text-align: left; padding: 5px 6px; font-size: 10px; cursor: help; }
 table.step-table td { padding: 3px 6px; border-bottom: 1px solid var(--border); white-space: pre; }
 table.step-table td.num { text-align: right; color: var(--muted); }
 table.step-table td.val { white-space: pre; }
@@ -186,11 +212,11 @@ table.step-table td.val { white-space: pre; }
 .step-row:hover { background: var(--panel); }
 .step-row.done td { color: var(--fg); }
 .step-row:not(.done) td { color: #5e6f80; }
-.step-row.current { background: rgba(45,167,223,.20); }
+.step-row.current { background: rgba(var(--accent-rgb), .20); }
 .step-table .kind.entry { color: var(--ok); }
 .step-table .kind.exit { color: var(--accent2); }
-.step-table .ty.vm { color: #fb923c; }
-.step-table .ty.tmm { color: #2dd4bf; }
+.step-table .ty.vm { color: var(--vm-soft); }
+.step-table .ty.tmm { color: var(--tmm-soft); }
 
 /* bytecode reference (collapsed by default to keep the view uncluttered) */
 .bc-ref { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-top: 12px; }
@@ -198,9 +224,9 @@ table.step-table td.val { white-space: pre; }
 .bc-ref-body { margin-top: 10px; font-size: 13px; max-width: 860px; }
 .bc-note { color: var(--fg); margin: 0 0 10px; line-height: 1.5; }
 .bc-ref code { font-family: monospace; background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
-.bc-table { border-collapse: collapse; margin: 8px 0; }
+.bc-table { margin: 8px 0; }
 .bc-table th, .bc-table td { text-align: left; padding: 4px 18px 4px 0; border-bottom: 1px solid var(--border); }
-.bc-table th { color: var(--muted); text-transform: uppercase; font-size: 10px; letter-spacing: .5px; }
+.bc-table th { font-size: 10px; letter-spacing: .5px; }
 .bc-table td:first-child { font-family: monospace; color: var(--accent); }
 .bc-links { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .bc-links a { color: var(--accent); }
@@ -209,9 +235,9 @@ table.step-table td.val { white-space: pre; }
 .an-source { margin-top: 16px; }
 .sm-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
 .sm-legend em { font-style: normal; opacity: .8; }
-.smlg { width: 12px; height: 12px; border-radius: 3px; display: inline-block; margin: 0 4px 0 12px; border: 1px solid var(--border); }
-.smlg-hit { background: rgba(63,185,80,.45); border-color: var(--ok); }
-.smlg-amb { background: rgba(214,161,59,.5); border-color: var(--warn); }
+.smlg { margin: 0 4px 0 12px; border: 1px solid var(--border); }
+.smlg-hit { background: rgba(var(--ok-rgb), .45); border-color: var(--ok); }
+.smlg-amb { background: rgba(var(--warn-rgb), .5); border-color: var(--warn); }
 .smlg-dim { background: var(--panel2); opacity: .5; }
 .sm-leg-note { margin-left: 16px; font-style: italic; }
 .sm-srcwrap { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
@@ -232,11 +258,11 @@ table.step-table td.val { white-space: pre; }
 .sm-line { font: 12px/1.5 monospace; white-space: pre; padding: 0 6px; border-left: 3px solid transparent;
   display: flex; align-items: baseline; }
 .sm-line code { white-space: pre; }
-.sm-line.hit { background: rgba(63,185,80,.12); border-left-color: var(--ok); cursor: pointer; }
-.sm-line.hit:hover { background: rgba(63,185,80,.22); }
-.sm-line.ambiguous { background: rgba(214,161,59,.14); border-left-color: var(--warn); }
+.sm-line.hit { background: rgba(var(--ok-rgb), .12); border-left-color: var(--ok); cursor: pointer; }
+.sm-line.hit:hover { background: rgba(var(--ok-rgb), .22); }
+.sm-line.ambiguous { background: rgba(var(--warn-rgb), .14); border-left-color: var(--warn); }
 .sm-line.dim { opacity: .42; border-left-color: #3a4756; }
-.sm-line.active { background: rgba(45,167,223,.28) !important; border-left-color: var(--accent); }
+.sm-line.active { background: rgba(var(--accent-rgb), .28) !important; border-left-color: var(--accent); }
 .sm-mu { margin-left: auto; padding-left: 12px; color: var(--accent); font-size: 10px; white-space: nowrap; }
 .sm-cmds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .sm-chip { background: var(--panel2); border: 1px solid var(--border); border-radius: 12px;
@@ -246,9 +272,6 @@ table.step-table td.val { white-space: pre; }
 /* load dialog (modal) */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex;
   align-items: center; justify-content: center; z-index: 50; }
-/* the [hidden] attribute must win over .modal's display:flex (author CSS beats
-   the UA [hidden]{display:none} rule, so re-assert it more specifically) */
-.modal[hidden] { display: none; }
 .modal-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
   width: min(640px, 92vw); max-height: 86vh; display: flex; flex-direction: column; box-shadow: 0 16px 48px rgba(0,0,0,.5); }
 .modal-head { display: flex; align-items: center; justify-content: space-between;
@@ -262,15 +285,10 @@ table.step-table td.val { white-space: pre; }
 .filebtn:hover { border-color: var(--accent); }
 .modal-hint { color: var(--muted); font-size: 12px; margin: 10px 0; }
 .modal-label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; }
-/* the report TMM chooser (rep-tmm-wrap, a .modal-label) is hidden for single-TMM
-   captures; display:block above beats the UA [hidden] rule, so re-assert it. */
-.modal-label[hidden] { display: none; }
 /* saved-session picker in the load dialog: select grows, Load button hugs right. */
 .an-saved { display: flex; align-items: flex-end; gap: 8px; margin: 12px 0 0; }
 .an-saved .modal-label { flex: 1; margin: 0; }
 .an-saved select { width: 100%; }
-/* display:flex above beats the UA [hidden] rule (recurring trap) — re-assert. */
-.an-saved[hidden] { display: none; }
 #an-raw { width: 100%; background: var(--bg); color: var(--fg);
   border: 1px solid var(--border); border-radius: 6px; padding: 8px; font: 12px/1.4 monospace; }
 #an-session-select { width: 100%; }
@@ -293,7 +311,6 @@ table.step-table td.val { white-space: pre; }
   padding: 8px 16px; font-size: 14px; cursor: pointer; }
 .an-subtab:hover { color: var(--fg); }
 .an-subtab.active { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
-.an-pane[hidden] { display: none; }
 
 /* the d3-flame-graph renders dark-on-light, so give it a white surface like
    the sequence diagram. */
@@ -305,7 +322,6 @@ table.step-table td.val { white-space: pre; }
 .flame-stack-label { display: inline-block; white-space: nowrap; font-size: 12px; color: #475569;
   font-weight: 600; padding: 2px 2px 6px; border-bottom: 1px solid #e2e8f0; margin-bottom: 6px; }
 #fl-summary { font-size: 12px; }
-#fl-folded, #fl-reset, #diff-reset, #diff-load-b { padding: 6px 12px; font-size: 13px; }
 
 /* d3-flame-graph label/title text on the white surface */
 .flame-canvas .d3-flame-graph-label { color: #1b2530; }
@@ -353,9 +369,9 @@ table.step-table td.val { white-space: pre; }
 .cy-agg-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
 .cy-sec h4 { margin: 0; font-size: 13px; color: var(--fg); }
 .cy-sub { font-size: 11px; color: var(--muted); margin: 2px 0 8px; }
-table.cy-table { width: 100%; border-collapse: collapse; font: 12px/1.4 monospace; }
+table.cy-table { width: 100%; font: 12px/1.4 monospace; }
 table.cy-table th { text-align: center; padding: 5px 10px; border: 1px solid var(--border);
-  color: var(--muted); text-transform: uppercase; font-size: 10px; letter-spacing: .5px; white-space: nowrap; }
+  font-size: 10px; letter-spacing: .5px; white-space: nowrap; }
 table.cy-table td { padding: 4px 10px; border: 1px solid var(--border); white-space: nowrap; }
 table.cy-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 table.cy-table tr.cy-total td { border-top: 2px solid var(--accent2); font-weight: 700; color: var(--fg); }
@@ -364,11 +380,6 @@ table.cy-table tr.cy-total td { border-top: 2px solid var(--accent2); font-weigh
 table.cy-reconcile th:nth-child(3),
 table.cy-reconcile td:nth-child(3) { border-left: 3px solid var(--accent2); }
 table.cy-table tbody tr:hover { background: var(--panel); }
-.cy-badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
-.cy-badge.ok { background: var(--ok); color: #06210d; }
-.cy-badge.warn { background: var(--warn); color: #261c05; }
-.cy-badge.bad { background: var(--accent2); color: #fff; }
-.an-controls #cy-reset, .an-controls #cy-snapshot { padding: 6px 12px; }
 .an-controls button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* ---- Sessions: raw occurrences viewer -------------------------------- */

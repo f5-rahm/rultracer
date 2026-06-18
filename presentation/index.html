@@ -251,9 +251,9 @@
             <button id="seq-zoom-reset" type="button" title="reset zoom">&#10530;</button>
             <button id="seq-zoom-in" type="button" title="zoom in">+</button>
           </span>
-          <button id="an-export-svg" type="button" title="download the diagram as SVG">SVG</button>
-          <button id="an-export-png" type="button" title="download the diagram as PNG">PNG</button>
-          <button id="an-mermaid" type="button" title="download a Mermaid sequenceDiagram of the selected trace">Mermaid</button>
+          <button id="an-export-svg" type="button" class="btn-sm" title="download the diagram as SVG">SVG</button>
+          <button id="an-export-png" type="button" class="btn-sm" title="download the diagram as PNG">PNG</button>
+          <button id="an-mermaid" type="button" class="btn-sm" title="download a Mermaid sequenceDiagram of the selected trace">Mermaid</button>
         </div>
 
         <div class="an-grid">
@@ -285,15 +285,9 @@
             </p>
             <table class="bc-table">
               <thead><tr><th>opcode</th><th>meaning</th></tr></thead>
-              <tbody>
-                <tr><td>push1</td><td>push a literal/constant onto the stack</td></tr>
-                <tr><td>loadScalarStk</td><td>load a scalar variable’s value</td></tr>
-                <tr><td>storeScalarStk</td><td>store into a scalar variable (surfaces as <code>VAR_MOD</code>)</td></tr>
-                <tr><td>invokeStk1</td><td>invoke a command (the following <code>CMD_VM</code> names it)</td></tr>
-                <tr><td>concat1</td><td>concatenate strings on the stack</td></tr>
-                <tr><td>eq</td><td>equality comparison (<code>==</code>)</td></tr>
-                <tr><td>done</td><td>end of the script’s byte code</td></tr>
-              </tbody>
+              <!-- Rows rendered from window.RPOpcodes.table (app.js) — single
+                   source of truth shared with the seq-diagram tick tooltips. -->
+              <tbody id="bc-table-body"></tbody>
             </table>
             <p class="bc-links">
               Further reading:
@@ -341,8 +335,8 @@
             </span>
             <span class="spacer"></span>
             <span id="fl-summary" class="msg"></span>
-            <button id="fl-reset" type="button" title="reset zoom">Reset zoom</button>
-            <button id="fl-folded" type="button" title="download folded stacks (Brendan-Gregg format)">Folded</button>
+            <button id="fl-reset" type="button" class="btn-sm" title="reset zoom">Reset zoom</button>
+            <button id="fl-folded" type="button" class="btn-sm" title="download folded stacks (Brendan-Gregg format)">Folded</button>
           </div>
           <div class="pane-title">Flamegraph
             <small>width = inclusive µs · click a frame to zoom · bytecodes pruned (counts in tooltip) · literal mode stacks one graph per event (graph width ∝ event duration)</small>
@@ -355,7 +349,7 @@
             <span class="diff-baseline">Baseline <strong>A</strong>: <span id="diff-a-name">current trace</span></span>
             <span class="diff-vs">vs</span>
             <span class="diff-compare">Comparison <strong>B</strong>: <span id="diff-b-name" class="muted">none loaded</span></span>
-            <button id="diff-load-b" type="button" class="primary">Load comparison&hellip;</button>
+            <button id="diff-load-b" type="button" class="primary btn-sm">Load comparison&hellip;</button>
             <button id="diff-clear" type="button" title="clear comparison B and return to the aggregate baseline" disabled>Clear</button>
             <span class="spacer"></span>
             <label id="diff-mode-wrap">View
@@ -364,7 +358,7 @@
                 <option value="side">Side by side</option>
               </select>
             </label>
-            <button id="diff-reset" type="button" title="reset zoom">Reset zoom</button>
+            <button id="diff-reset" type="button" class="btn-sm" title="reset zoom">Reset zoom</button>
           </div>
           <div class="pane-title">Diff
             <small>Δ self time B−A · <span class="diff-key diff-slower">red = slower in B</span> · <span class="diff-key diff-faster">blue = faster in B</span></small>
@@ -388,8 +382,8 @@
             <label id="cy-rule-wrap">Rule
               <select id="cy-rule" title="rule whose ltm rule stats to reset / snapshot"></select>
             </label>
-            <button id="cy-reset" type="button" title="zero the rule's stat counters before a high-volume timing run">Reset stats</button>
-            <button id="cy-snapshot" type="button" class="primary" title="read CPU + ltm rule stats and store them on this session">Snapshot stats now</button>
+            <button id="cy-reset" type="button" class="btn-sm" title="zero the rule's stat counters before a high-volume timing run">Reset stats</button>
+            <button id="cy-snapshot" type="button" class="primary btn-sm" title="read CPU + ltm rule stats and store them on this session">Snapshot stats now</button>
             <span class="spacer"></span>
             <span id="cy-status" class="msg"></span>
           </div>
@@ -473,6 +467,7 @@
   <script src="vendor/d3-flamegraph.min.js"></script>
   <script src="js/api.js"></script>
   <script src="js/parser.js"></script>
+  <script src="js/opcodes.js"></script>
   <script src="js/model.js"></script>
   <script src="js/tmm.js"></script>
   <script src="js/flame.js"></script>

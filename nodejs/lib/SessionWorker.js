@@ -13,6 +13,7 @@ var Store = require('./store');
 var restutil = require('./restutil');
 var util = require('./util');
 var cpustats = require('./cpustats');
+var validate = require('./validate');
 
 function SessionWorker() {
     this.WORKER_URI_PATH = 'shared/rultracer/sessions';
@@ -41,6 +42,11 @@ SessionWorker.prototype.onGet = function (restOperation) {
     }
 
     var id = seg[0];
+    // Guard the id before it reaches a filesystem path (store._dir). Blocks
+    // `../`-style traversal on GET /sessions/<id> and /<id>/raw.
+    if (!validate.isValidSessionId(id)) {
+        return restutil.fail(self, restOperation, new Error('invalid session id: ' + JSON.stringify(id)));
+    }
     if (seg[1] === 'raw') {
         util.readFileOrNull(this.store.rawPath(id))
             .then(function (txt) {
@@ -100,6 +106,10 @@ SessionWorker.prototype._begin = function (restOperation) {
 SessionWorker.prototype._cycles = function (restOperation, id) {
     var self = this;
     var body = restOperation.getBody() || {};
+    // id reaches store.writeRaw/updateManifest (filesystem paths) — guard it.
+    if (!validate.isValidSessionId(id)) {
+        return restutil.fail(this, restOperation, new Error('invalid session id: ' + JSON.stringify(id)));
+    }
     // Finalize a cycles-only run (no profiler trace): mark the shell session
     // 'finalized' so it lists + analyzes (Stats populated, other panes empty).
     // Handled before the rules guard since it needs no rule list.
@@ -181,6 +191,17 @@ SessionWorker.prototype._import = function (restOperation) {
                 failed += 1;
                 return Promise.resolve();
             }
+            // The id becomes a filesystem path component; reject traversal in an
+            // imported bundle. Also coerce status to a bare word so a hostile
+            // backup can't smuggle markup that the SPA later renders (defense in
+            // depth — the session-list badge is built with textContent too).
+            if (!validate.isValidSessionId(entry.manifest.id)) {
+                failed += 1;
+                return Promise.resolve();
+            }
+            if (entry.manifest.status && !/^[A-Za-z]+$/.test(entry.manifest.status)) {
+                entry.manifest.status = 'imported';
+            }
             return self.store.createSession(entry.manifest).then(function () {
                 if (typeof entry.raw === 'string' && entry.raw.length > 0) {
                     return util.pWriteFile(self.store.rawPath(entry.manifest.id), entry.raw);
@@ -196,6 +217,11 @@ SessionWorker.prototype.onDelete = function (restOperation) {
     var self = this;
     var seg = restutil.segments(restOperation);
     if (seg.length === 0) { return restutil.fail(this, restOperation, new Error('session id required')); }
+    // Guard before deleteSession -> store.rimraf(_dir(id)): blocks a traversal id
+    // from turning DELETE into an arbitrary recursive delete.
+    if (!validate.isValidSessionId(seg[0])) {
+        return restutil.fail(this, restOperation, new Error('invalid session id: ' + JSON.stringify(seg[0])));
+    }
     this.store.deleteSession(seg[0])
         .then(function () { restutil.ok(self, restOperation, { deleted: seg[0] }); })
         .catch(function (err) { restutil.fail(self, restOperation, err); });

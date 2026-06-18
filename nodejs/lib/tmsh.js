@@ -108,7 +108,13 @@ function runSafe(cmd, opts) {
 // raw commandResult as stdout; does NOT parse for tmsh-style errors (bash
 // commands can legitimately exit non-zero, e.g. grep when no matches). Used to
 // run prebuilt /var/tmp/*.sh scripts so we don't have to inline-quote complex
-// shell. bashCmd should be simple and free of special characters.
+// shell.
+//
+// SECURITY CONTRACT: bashCmd is dropped verbatim inside `bash -c "<bashCmd>"`
+// and runs as ROOT — it performs NO escaping. Callers MUST pass only literal
+// commands or values they have already validated/quoted (e.g. capture.js
+// guards filePath and single-quotes its temp paths). Never pass unvalidated
+// request input here.
 function runBash(bashCmd) {
     return new Promise(function (resolve, reject) {
         var body = { command: 'run', utilCmdArgs: '-c "' + bashCmd + '"' };
