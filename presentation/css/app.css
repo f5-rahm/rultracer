@@ -221,7 +221,12 @@ table.step-table td.val { white-space: pre; }
 /* bytecode reference (collapsed by default to keep the view uncluttered) */
 .bc-ref { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-top: 12px; }
 .bc-ref > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
-.bc-ref-body { margin-top: 10px; font-size: 13px; max-width: 860px; }
+.bc-ref-body { margin-top: 10px; font-size: 13px; max-width: 1280px; }
+/* Two columns: opcode reference (left) | disassembler (right). Wraps to a
+   stack on narrow panes. */
+.bc-cols { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+.bc-col-ref { flex: 1 1 360px; min-width: 300px; max-width: 520px; }
+.bc-col-disasm { flex: 2 1 460px; min-width: 360px; }
 .bc-note { color: var(--fg); margin: 0 0 10px; line-height: 1.5; }
 .bc-ref code { font-family: monospace; background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
 .bc-table { margin: 8px 0; }
@@ -230,6 +235,63 @@ table.step-table td.val { white-space: pre; }
 .bc-table td:first-child { font-family: monospace; color: var(--accent); }
 .bc-links { margin: 10px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .bc-links a { color: var(--accent); }
+
+/* Tcl 8.5-only opcode flag (reference table + disassembler table). */
+.op-85 {
+  font-size: 9px; letter-spacing: .5px; text-transform: uppercase;
+  background: var(--vm); color: #fff; padding: 1px 5px; border-radius: 4px;
+  vertical-align: middle; white-space: nowrap;
+}
+
+/* Phase 8 disassembler (inside the bc-ref panel; right column of .bc-cols). */
+.disasm .pane-title { margin-bottom: 8px; }
+.disasm-guidance { font-size: 12px; }
+.disasm-version-label {
+  font-size: 12px; color: var(--muted); margin: 0 0 10px; line-height: 1.5;
+  border-left: 3px solid var(--warn); padding-left: 10px;
+}
+.disasm-disabled { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 12px; }
+.disasm-disabled p { margin: 0 0 10px; color: var(--fg); }
+#disasm-input {
+  width: 100%; box-sizing: border-box; font-family: monospace; font-size: 12px;
+  background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px; resize: vertical;
+}
+.disasm-controls { display: flex; align-items: center; gap: 14px; margin: 8px 0; }
+.disasm-toggle { color: var(--muted); font-size: 12px; cursor: pointer; }
+.disasm-statusmsg { color: var(--muted); font-size: 12px; }
+.disasm-statusmsg-err { color: var(--accent2); }
+.disasm-warnings { margin: 8px 0; }
+.disasm-warn { color: var(--warn); font-size: 12px; line-height: 1.5; }
+.disasm-output { margin-top: 8px; }
+.disasm-result { margin-bottom: 16px; }
+.disasm-handler {
+  font-family: monospace; font-size: 12px; color: var(--vm-soft);
+  border-bottom: 1px solid var(--border); padding-bottom: 4px; margin-bottom: 8px;
+}
+.disasm-cost { color: var(--muted); font-size: 11px; margin-bottom: 8px; }
+.disasm-raw {
+  font-family: monospace; font-size: 12px; white-space: pre; overflow-x: auto;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 10px; margin: 0; color: var(--fg);
+}
+.disasm-error {
+  font-family: monospace; font-size: 12px; white-space: pre-wrap;
+  background: rgba(216, 59, 59, .08); border: 1px solid var(--accent2);
+  border-radius: 6px; padding: 10px; margin: 0; color: var(--fg);
+}
+.disasm-block { margin-bottom: 12px; }
+.disasm-block-src { font-family: monospace; font-size: 12px; color: var(--accent); margin-bottom: 4px; }
+.disasm-empty { color: var(--muted); font-size: 12px; font-style: italic; margin-bottom: 8px; }
+.disasm-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.disasm-table th, .disasm-table td {
+  text-align: left; padding: 3px 12px 3px 0; border-bottom: 1px solid var(--border); vertical-align: top;
+}
+.disasm-table th { color: var(--muted); font-size: 10px; letter-spacing: .5px; text-transform: uppercase; }
+.disasm-pc { font-family: monospace; color: var(--muted); text-align: right; white-space: nowrap; }
+.disasm-op code { font-family: monospace; background: var(--panel2); padding: 1px 5px; border-radius: 4px; color: var(--accent); }
+.disasm-operands { font-family: monospace; color: var(--fg); white-space: nowrap; }
+.disasm-comment { font-family: monospace; color: var(--ok); }
 
 /* source map */
 .an-source { margin-top: 16px; }

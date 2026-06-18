@@ -65,13 +65,13 @@ test('table: every row has a non-empty op and meaning', function () {
 
 // ---- meaning(): exact lookup, tag stripping, unknowns ---------------------
 test('meaning(): exact opcode returns plain-text meaning', function () {
-  assert.strictEqual(RPOpcodes.meaning('push1'), 'push a literal/constant onto the stack');
+  assert.strictEqual(RPOpcodes.meaning('push1'), 'push a literal/constant onto the stack (1-byte operand index)');
 });
 
 test('meaning(): inline <code> tags are stripped for the tooltip', function () {
   assert.strictEqual(RPOpcodes.meaning('storeScalarStk'),
-    'store into a scalar variable (surfaces as VAR_MOD)');
-  assert.strictEqual(RPOpcodes.meaning('eq'), 'equality comparison (==)');
+    'store into a scalar variable, name from the stack (surfaces as VAR_MOD)');
+  assert.strictEqual(RPOpcodes.meaning('eq'), 'numeric equality comparison (==)');
 });
 
 test('meaning(): unknown / null / undefined return null', function () {
@@ -87,7 +87,7 @@ test('meaning(): falls back to the leading token when an operand is appended', f
 
 // ---- tip(): "opcode — meaning" or null ------------------------------------
 test('tip(): formats "opcode — meaning" for known opcodes', function () {
-  assert.strictEqual(RPOpcodes.tip('push1'), 'push1 — push a literal/constant onto the stack');
+  assert.strictEqual(RPOpcodes.tip('push1'), 'push1 — push a literal/constant onto the stack (1-byte operand index)');
 });
 
 test('tip(): returns null for unknown opcodes (no <title> rendered)', function () {

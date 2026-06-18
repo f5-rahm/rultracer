@@ -24,7 +24,7 @@
 
 set -euo pipefail
 
-VERSION="${1:-0.7.1}"
+VERSION="${1:-0.8.0}"
 RELEASE="${2:-0002}"
 APP_NAME="rultracer"
 
@@ -155,6 +155,7 @@ exit 0
 /var/config/rest/iapps/${APP_NAME}/nodejs/lib/capture.js
 /var/config/rest/iapps/${APP_NAME}/nodejs/lib/configProcessor.js
 /var/config/rest/iapps/${APP_NAME}/nodejs/lib/cpustats.js
+/var/config/rest/iapps/${APP_NAME}/nodejs/lib/DisasmWorker.js
 /var/config/rest/iapps/${APP_NAME}/nodejs/lib/engine.js
 /var/config/rest/iapps/${APP_NAME}/nodejs/lib/iremote.js
 /var/config/rest/iapps/${APP_NAME}/nodejs/lib/logchain.js
@@ -172,6 +173,8 @@ exit 0
 /var/config/rest/iapps/${APP_NAME}/presentation/js/app.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/parser.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/opcodes.js
+/var/config/rest/iapps/${APP_NAME}/presentation/js/disasm.js
+/var/config/rest/iapps/${APP_NAME}/presentation/js/disasmview.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/model.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/tmm.js
 /var/config/rest/iapps/${APP_NAME}/presentation/js/flame.js

@@ -273,8 +273,10 @@
         </div>
 
         <details class="bc-ref">
-          <summary>Bytecode reference — opcode meanings &amp; why some commands don’t appear</summary>
+          <summary>Bytecode reference &amp; disassembler — opcode meanings, and recover the operands the trace drops</summary>
           <div class="bc-ref-body">
+            <div class="bc-cols">
+            <div class="bc-col-ref">
             <p class="bc-note">
               <strong>Why don’t I see some common Tcl commands (e.g. <code>set</code>, <code>append</code>) in the trace?</strong>
               The Tcl interpreter compiles the script to byte code before the first execution, and some Tcl
@@ -286,7 +288,8 @@
             <table class="bc-table">
               <thead><tr><th>opcode</th><th>meaning</th></tr></thead>
               <!-- Rows rendered from window.RPOpcodes.table (app.js) — single
-                   source of truth shared with the seq-diagram tick tooltips. -->
+                   source of truth shared with the seq-diagram tick tooltips and
+                   the disassembler's structured-table view. -->
               <tbody id="bc-table-body"></tbody>
             </table>
             <p class="bc-links">
@@ -294,8 +297,46 @@
               <a href="https://community.f5.com/kb/technicalarticles/irule-execution-tracing-and-performance-profiling-part-3/276362" target="_blank" rel="noopener">iRule Execution Tracing &amp; Performance Profiling, Part 3</a>
               &middot;
               <a href="https://community.f5.com/kb/technicalarticles/advanced-irules-an-abstract-view-of-irules-with-the-tcl-bytecode-disassembler/286068" target="_blank" rel="noopener">An Abstract View of iRules with the Tcl Bytecode Disassembler</a>
-              — use Tcl’s disassembler to recover the literals/operands the trace omits.
             </p>
+            </div><!-- /bc-col-ref -->
+
+            <div class="disasm bc-col-disasm">
+              <div class="pane-title">Disassembler <small>paste Tcl → the box’s own bytecode, with the operands the live trace drops</small></div>
+              <p class="bc-note disasm-guidance">
+                The live trace shows <code>push1</code> but never the value it pushed; this runs the box’s
+                <code>tclsh</code> disassembler to recover those literals/operands — the static “what the compiler
+                produced” companion to the live “what ran”.
+                <strong>Replace iRule extension commands with literals before disassembling</strong> — e.g.
+                <code>[HTTP::host]</code> → <code>"example.com"</code> — so the value flows into the surrounding
+                logic (non-abstracted calls still disassemble, just as an opaque <code>invokeStk</code>).
+                A whole <code>when { … }</code> handler is auto-stripped to its body (with a warning).
+              </p>
+              <p class="disasm-version-label">
+                Output is <strong>Tcl 8.5.13</strong> disassembly (the box’s standalone <code>tclsh</code>); it
+                <em>approximates</em> the iRule engine’s <strong>Tcl 8.4.6</strong> bytecode — close, but a few
+                opcodes differ or are 8.5-only (flagged <span class="op-85">Tcl 8.5</span>).
+              </p>
+
+              <!-- Disabled state: opt-in gate (settings disasmEnabled=false). -->
+              <div id="disasm-disabled" class="disasm-disabled" hidden>
+                <p>The disassembler runs <code>tclsh</code> on the box and is <strong>off by default</strong>.</p>
+                <button id="disasm-enable" type="button">Enable disassembler</button>
+              </div>
+
+              <!-- Active state. -->
+              <div id="disasm-ui" hidden>
+                <textarea id="disasm-input" rows="6" spellcheck="false"
+                  placeholder="expr 3 * 4&#10;&#10;# or paste a handler:&#10;when HTTP_REQUEST { if {[string tolower &quot;X&quot;] eq &quot;x&quot;} { set y 1 } }"></textarea>
+                <div class="disasm-controls">
+                  <button id="disasm-run" type="button">Disassemble</button>
+                  <label class="disasm-toggle"><input type="checkbox" id="disasm-table-mode"> Structured table</label>
+                  <span id="disasm-status" class="disasm-statusmsg"></span>
+                </div>
+                <div id="disasm-warnings" class="disasm-warnings" hidden></div>
+                <div id="disasm-output" class="disasm-output"></div>
+              </div>
+            </div><!-- /bc-col-disasm -->
+            </div><!-- /bc-cols -->
           </div>
         </details>
 
@@ -468,6 +509,8 @@
   <script src="js/api.js"></script>
   <script src="js/parser.js"></script>
   <script src="js/opcodes.js"></script>
+  <script src="js/disasm.js"></script>
+  <script src="js/disasmview.js"></script>
   <script src="js/model.js"></script>
   <script src="js/tmm.js"></script>
   <script src="js/flame.js"></script>

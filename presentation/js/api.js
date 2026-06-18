@@ -49,6 +49,10 @@
     getRaw: function (id) { return get('/sessions/' + encodeURIComponent(id) + '/raw'); },
     deleteSession: function (id) { return del('/sessions/' + encodeURIComponent(id)); },
     exportSessions: function () { return get('/sessions/export'); },
-    importSessions: function (bundle) { return post('/sessions/import', bundle); }
+    importSessions: function (bundle) { return post('/sessions/import', bundle); },
+    // Phase 8 bytecode disassembler.
+    disasmStatus: function () { return get('/disasm'); },
+    disasm: function (script) { return post('/disasm', { script: script }); },
+    disasmEnable: function (on) { return post('/disasm', { action: on ? 'enable' : 'disable' }); }
   };
 })();

@@ -9,7 +9,8 @@ var DEFAULTS = {
     retentionMaxSessions: 20,
     retentionMaxBytes: 524288000, // ~500 MB
     publisherMode: 'auto',        // auto | reuse | create
-    maxPeriodMs: 600000           // safety ceiling for the rule-profiler period
+    maxPeriodMs: 600000,          // safety ceiling for the rule-profiler period
+    disasmEnabled: false          // Phase 8 bytecode disassembler: opt-in, default OFF
 };
 
 function file(dataDir) { return path.join(dataDir, 'settings.json'); }

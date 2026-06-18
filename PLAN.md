@@ -114,9 +114,9 @@ RPM via `build/build-rpm.sh` (dynamic `.spec`, noarch; `%files` = `nodejs/`, `pr
 - **Phase 4 — Cycles-vs-CPU stats (goal 7). ✅ CODE COMPLETE v0.4.0 (headless-validated; on-box validation + tag `phase4` pending).** Reframed during clarifying Q&A: the **authoritative cycles are `ltm rule stats`** (per-event hardware counters), not the rule-profiler trace — the trace µs is overhead-inflated and serves as the per-command source + reconcile comparand. CPU budget = Σ all-core MHz × 1e6 (DevCentral "Evaluating Performance" gist convention). New **Stats** sub-tab with Reset/Snapshot orchestration (user drives the high-volume traffic), snapshot persisted into `manifest.cycles`. Seam used: `SourceMap.commandStats`-style rollup reimplemented in the pure `cycles.js`. *See "Phase 4 delivery & lessons" at the end of this doc.*
 - **Phase 5 — Reports + Mermaid export (goal 8). ✅ DELIVERED v0.5.0 (tag `phase5`, on-box validation pending).** Self-contained HTML report (chooser: scope + panel checkboxes) with a hand-rolled static icicle SVG (no d3), the existing self-contained sequence SVG, and the reused Stats/Source DOM; JSON data export; enriched Mermaid (activations, TMM/VM boxes, autonumber, per-event cycle notes). Folded stacks already shipped in Phase 3. New pure seam `reportdata.js`. *See "Phase 5 delivery & lessons" at the end of this doc.*
 - **Phase 6 — Multi-TMM & trace layering (deferred from goal-7/viz). ✅ DELIVERED v0.6.0 (tags `phase6` / `phase6.1`; on-box validated).** Pure `RPTmm.partition` seam (by `ctxId`, TMM 0..N by sort); TMM scope dropdown (single-TMM default / interleaved) scoping the flow/event grouping; interleaved flow badges; report TMM chooser; bundled 4-TMM example. Stats stays whole-box. The **diff stays capture-vs-capture** (per-TMM diffs were prototyped and removed; v6.1 added a Clear button + saved-session loader). The `tmmN[pid]` prefix / trailing-field questions remain deferred to real multi-blade hardware. *See "Phase 6 delivery & lessons" at the end of this doc.*
-- **Phase 7 — Wrap-up / polish (optional, end of project).** Small quality-of-life adds deferred to keep earlier phases clean:
-  - **Inline bytecode opcode hints** — hover tooltip (and/or opt-in verbose label) on each bytecode tick mapping the mnemonic to its meaning (`push1` → "push a literal", etc.), reusing the opcode table already in the collapsed "Bytecode reference" panel. Kept off-screen for now by request; promote to inline if desired.
+- **Phase 7 — Wrap-up / polish. ✅ DELIVERED v0.7.1 (tag `phase7`, on-box validated).** Inline bytecode opcode tooltips (new pure `opcodes.js` seam — native SVG `<title>` on each bytecode tick + the panel table rendered from one shared map); CSS consolidation (design tokens / shared table+badge rules / global `[hidden]` / `.btn-sm`); security hardening (session-id path-traversal guard, status-badge XSS fix, `tmsh.runBash` contract + `capture.js` path quoting); cleanup pass (dead `API.cpuInfo`, archived phase prompts). *(The earlier docs-only slice was tagged `phase7-docs` at v0.7.0.)*
   - Other deferred polish as it accrues.
+- **Phase 8 — Bytecode disassembler. ✅ DELIVERED v0.8.0 (tag `phase8`, on-box validated).** A `tcl::unsupported::disassemble`-backed scratchpad folded into the renamed **"Bytecode reference & disassembler"** panel (now a two-column layout — opcode reference left, disassembler right): paste Tcl → the box's own bytecode, raw-text or structured-table view (checkbox toggle), opcodes cross-linked to the expanded `opcodes.js`. Compile-only; run as the uid-198 worker via `execFile('tclsh')` (NOT the root channel); **opt-in (settings toggle, default OFF)**. Explicitly staying **0.x** until substantial real-world feedback/use. *See "Phase 8 — Bytecode disassembler (spec)" + the "Phase 8 delivery & lessons" at the end of this doc.*
 
 Seams to leave from the start: generic NestNode/folded generation; keep parsing TMM-agnostic so a TMM partition can wrap it later; stub CPU inventory, Mermaid export, and flamegraph tab so later phases are additive, not refactors.
 
@@ -446,3 +446,170 @@ The fixture is a VE where the 4 TMMs are **threads of one process**. Unconfirmed
 4. ✅ **Report TMM chooser** — appears only for multi-TMM; scopes diagram + flamegraph; Stats/Source/JSON stay whole-capture.
 5. ✅ **Folded button** — plain `.folded` download (browser-dependent save dialog), not an in-app modal.
 6. The recurring **`[hidden]` specificity** trap on `#an-tmm-wrap` / `#rep-tmm-wrap` — handled (`.an-controls label[hidden]` / `.modal-label[hidden]`).
+
+---
+
+## Phase 8 — Bytecode disassembler (spec — 0.8.0, NOT yet built)
+
+> Status: **DELIVERED v0.8.0** (tag `phase8`, on-box validated). The spec below is
+> preserved as written; what actually shipped is recorded in **"Phase 8 delivery &
+> lessons"** at the very end of this doc. Explicitly **staying 0.x** until
+> substantial real-world feedback and use; not labeled "v1". This is the first
+> phase past the original 8 goals — a net-new feature, not polish.
+
+### Why
+
+`ltm rule-profiler` deliberately drops the **operand** being pushed: the live trace
+shows `push1` but never `# "3"`. The collapsed bytecode panel already tells users (in
+its Further Reading link) to *"use Tcl's disassembler to recover the literals/operands
+the trace omits."* This feature bakes that workflow into the UI: paste a Tcl snippet,
+get the **box's own** bytecode back, with operands intact — the static "what the
+compiler produced" companion to the live "what actually ran" in the sequence diagram.
+It reuses the Phase 7 `opcodes.js` map to annotate the output.
+
+Example (run on-box today): `tcl::unsupported::disassemble script { expr 3 * 4 }` →
+`push1 0  # "3"` … `concat1 5` … `exprStk` … `done`.
+
+### Locked decisions (from clarifying Q&A)
+
+| Area | Decision |
+|---|---|
+| Version | **0.8.0**; **NOT** labeled "v1". Staying 0.x until lots of feedback/use. |
+| UI home | **Expand the collapsed "Bytecode reference" panel** → rename to **"Bytecode reference & disassembler"**. The static opcode table stays as a section within it. |
+| Input (0.8.0) | **Free-form paste box (scratchpad) only.** Works with no capture loaded. Pulling/abstracting the real loaded iRule, clicked-bytecode-tick jump, and source-selection were all liked but **deferred**: iRule extension commands (`[Module::cmd]`) must be hand-abstracted to literal values, and auto-stubbing them is too much overhead for now. |
+| Extension-command help | **Guidance + tooltips only.** An inline note + tooltips tell users to replace extension calls like `[HTTP::host]` with a literal value (e.g. `"example.com"`) before disassembling. No automation, no source coupling. |
+| `when { }` blocks | **Auto-strip the handler wrapper and disassemble the body, WITH warnings.** (`when` is itself an iRule command — tclsh treats it as unknown and the body as a string literal, so only the body is worth compiling.) **NOT** just `when EVENT {` — modifiers (`priority N`, `timing on\|off`) legally sit between the event and the body brace, so capture to the **first `{` after the `when` header**. See **"`when`-block extraction (precise rule)"** below. Warn what was stripped; warn on multiple handlers / unbalanced braces. |
+| Output | **Two views, checkbox toggle** (mirrors the existing "Collapse bytecodes" toggle): (1) **raw** tclsh-style text; (2) **structured table** (pc · opcode · operands · the `# literal` comment), opcodes cross-linked to `opcodes.js` tooltips. |
+| Execution | `child_process.execFile('tclsh', …)` as the **uid-198 worker** — **NOT** the `util/bash` root channel. Unlike `tmsh`, `tclsh` has no history-file write problem, so plain execFile works and keeps this off root. |
+| Safety | `disassemble script $body` **compiles, never executes**. The user body is passed as a **Tcl data variable** (env var or temp file), never interpolated into the command's braces → no brace-escape injection (`} ; exec … ; disassemble script {`). Plus a timeout + input/output size caps. |
+| Gating | **Settings toggle, default OFF (opt-in).** New `settings.js` flag (e.g. `disasmEnabled`). The disasm endpoint refuses unless enabled. **In-panel toggle only** — when off, the panel shows a disabled state with an "Enable disassembler" control that persists the flag. **No global Settings view in 0.8.0**; the existing hidden `settings.js` options (retention / publisher mode / max period) stay UI-less for now. |
+| Endpoint | New **dedicated `DisasmWorker`** at `POST /mgmt/shared/rultracer/disasm { script }` → `{ ok, output, parsed?, warnings[] }`; clear refusal when the flag is off. New worker means `manifest.json` + `build-rpm.sh` staging/`%files` updates. |
+| New pure seam | `presentation/js/disasm.js` (`window.RPDisasm`) parses raw tclsh disassembly → structured rows; **Node-6.9.1-safe**, headless-tested via `test/phase8.js`; added to `build-rpm.sh` staging **and** `%files`. |
+| Opcode dictionary | **Expand `opcodes.js` from 7 to a common ~20–40 opcode subset** — the ops that actually appear in typical iRule / `expr` / control-flow disassembly (`exprStk`, `concat1`, `jump`/`jumpTrue`/`jumpFalse`, `pop`, `dup`, `incrScalar`, list ops, …). Unknown opcodes fall back to the raw mnemonic. Keeps both the panel table and the tick tooltips meaningful in the disassembler view. Must cover **both** the live-trace (8.4.6) opcodes and the tclsh (8.5.13) disassembly opcodes — mostly overlapping, but some names diverge (e.g. trace `streq` vs tclsh `eq`). |
+| Persistence | Scratchpad is **ephemeral** (not saved into sessions). Optionally remember the last input in `localStorage`. |
+| Errors | Surface Tcl **compile errors** verbatim (they're useful feedback). Fail gracefully if `tclsh` or the `tcl::unsupported::disassemble` namespace is absent. |
+
+### Mechanism (server side)
+
+1. Browser POSTs the snippet to `/disasm`. Worker checks the `disasmEnabled` setting; if off, returns a clear "disassembler is disabled" envelope.
+2. Worker writes the body to an env var (or a `/var/tmp` temp file) and runs a **fixed** wrapper via `execFile('tclsh', …)` as uid 198: read the body **as data**, then `puts [tcl::unsupported::disassemble script $body]`. Timeout + output cap; clean up any temp file.
+3. Worker returns the raw text; the browser optionally parses it with `RPDisasm` for the structured-table view.
+
+The injection-safety hinge: the body is **data passed to** `disassemble`, not text spliced **into** the command, and `disassemble` compiles without executing. So even hostile input is compiled-and-shown, never run — and it runs as uid 198, off the root channel.
+
+### Caveats to surface in the UI
+
+- **Version mismatch (confirmed on-box).** The box's standalone `tclsh` is **Tcl 8.5.13**, but the **iRule engine is Tcl 8.4.6**. Bytecode for common constructs is *close* but **not guaranteed identical** (8.5 changed/added opcodes; 8.5-only syntax won't even run in the 8.4.6 engine). Label the output as *"Tcl 8.5.13 disassembly (approximates the 8.4.6 iRule engine)"* so nobody treats it as the exact iRule bytecode. Corollary: the **live trace (8.4.6)** and the **disassembler (8.5.13)** can print different names for the same op — e.g. the trace's `streq` vs tclsh's `eq` — so the opcode dictionary must cover both.
+- **`tclsh` is base Tcl, not the TMM iRule interpreter.** Core constructs (`expr`, `if`, loops, string ops) compile faithfully; iRule **extension commands show as generic `invokeStk`** to an unresolved name (consistent with how the live trace shows them). A one-line UI note sets this expectation.
+- **`tcl::unsupported::disassemble` is unsupported** — the namespace could shift across TMOS Tcl versions; fail gracefully if absent.
+
+### Confirmed on-box (2026-06-18) + remaining impl call
+
+- ✅ **`tclsh` = `/usr/bin/tclsh`**, and **uid 198 can exec it** (`sudo -u restnoded /usr/bin/tclsh <<< 'puts hi'` → `hi`). The off-root-channel premise holds.
+- ✅ **Tcl 8.5.13**, `::tcl::unsupported` namespace present (`namespace exists` → 1). But see the **8.5.13 (tclsh) vs 8.4.6 (iRule engine)** mismatch caveat above — load-bearing for how we label the output and build the opcode dictionary.
+- ✅ **Transport = env var** (`RULTRACER_DISASM_BODY`), fixed wrapper fed on stdin. No temp file.
+
+### Prototype outcomes (2026-06-18, `proto/disasm-proto.js` on-box, Tcl 8.5.13)
+
+A throwaway standalone prototype (run as `restnoded`/uid 198) exercised the exact
+exec-wrapper the worker will use. Results that drive the build:
+
+- ✅ **SAFETY PROVEN.** The injection probe body `exec touch /tmp/…` compiled to
+  `push1 "exec" / push1 "touch" / push1 "/tmp/…" / invokeStk1 / done` and the file
+  was **NOT** created. `disassemble script $body` (body passed as a data env var)
+  compiles without executing. **Transport decision locked: env var + stdin wrapper, no temp file.**
+- **`when` auto-strip CONFIRMED.** `when HTTP_REQUEST { set x 1 }` compiles `when`
+  as a command with the body ` set x 1 ` as an **uncompiled string literal**
+  (`push1 2  # " set x 1 "`). To disassemble the body you must extract it first —
+  exactly the auto-strip-with-warnings decision.
+- **Extension commands compile cleanly.** `[HTTP::host]` becomes its own `Command`
+  block: `push1 "HTTP::host" / invokeStk1 1`. So non-abstracted snippets do **not**
+  error; abstracting to a literal only matters when you want the result to flow
+  into surrounding logic (e.g. a `streq`). Guidance/tooltips suffice.
+- **`eq` operator → `streq` opcode** (not `eq`; `eq` is the `==` numeric op). Matches
+  the 8.4.6 trace. **`startCommand`** appears 9× — it is a **Tcl 8.5 artifact** the
+  8.4.6 iRule engine does not emit, so the dictionary must tag it "not in the trace."
+
+**Disassembly format (for the `disasm.js` parser):**
+- Ignore the `ByteCode 0x… refCt …` header line and the multi-column `Commands N:` summary index.
+- The `Source "…"` header is **truncated** for long scripts (no ellipsis) — use the per-`Command` `"src"` strings, not the `Source` header, for the source text.
+- An optional `Exception ranges N, depth N:` block appears for loops/`catch` — skip it (or surface loop ranges later).
+- Parse `Command N: "src"` blocks; each is followed by `    (pc) opcode [operands]  # comment` lines. The `# "literal"` comment is the **recovered operand** the live trace drops (the whole point).
+- **Command blocks can be empty** (a container like the `if` line) — the real instructions live under a nested `Command` (e.g. `[HTTP::host]`). The parser must tolerate header-only blocks.
+- Some operands carry no `#` comment (`concat1 5`, `invokeStk1 3`, `startCommand +35 1`, `jumpFalse1 +18  # pc 39`, `incrScalarStkImm +1`).
+- The `Cmds N, inst N, litObjs N, stkDepth N` summary line is a useful "cost" readout to surface.
+
+**Opcode dictionary seed (16 confirmed empirically from 7 small snippets):**
+`appendStk, concat1, done, exprStk, incrScalarStkImm, invokeStk1, jump1, jumpFalse1,
+jumpTrue1, loadScalarStk, lt, pop, push1, startCommand, storeScalarStk, streq`.
+Curate to ~20–40 by adding the obvious siblings: `push4`, the `4`-offset jumps
+(`jump4`/`jumpFalse4`/`jumpTrue4`), the numeric comparisons (`eq`/`neq`/`gt`/`ge`/`le`),
+`strneq`, `loadScalar1`/`storeScalar1`, `incrScalarStk`, `lappendStk`, `listIndex`,
+`tryCvtToNumeric`, `nop`. Tag `startCommand`/`incrScalarStkImm` as 8.5-isms.
+
+### `when`-block extraction (precise rule)
+
+iRule handlers allow **modifiers between the event name and the body brace**, so the
+wrapper is **not** simply `when EVENT {`. All of these are legal, and a standalone
+`timing on|off` directive can sit *outside* any handler:
+
+```
+timing off
+when CLIENT_ACCEPTED priority 300 {
+    log local0. "first"
+}
+when CLIENT_ACCEPTED priority 400 timing on {
+    log local0. "second"
+}
+when CLIENT_ACCEPTED timing on {
+    log local0. "third"
+}
+```
+
+Extraction algorithm (in `disasm.js`):
+
+1. Find a handler header with `/\bwhen\s+[A-Z][A-Z0-9_]*\b[^{]*\{/` — `when`, the event
+   name, **then any modifiers** (`priority <n>`, `timing on|off`; the `[^{]*` swallows
+   them and the whitespace), **then the first `{`**. (Modifiers contain no braces, so the
+   first `{` after the `when` header is always the body's opening brace.)
+2. From that `{`, **brace-count** to the matching `}` (handles nested `{…}` in the body).
+   That span is the body handed to `disassemble`.
+3. **Multiple handlers:** if more than one header matches, warn; for 0.8.0 either
+   disassemble each body labeled by its header (`CLIENT_ACCEPTED priority 300`, …) or
+   disassemble the first and note the rest (implementation call).
+4. **Discard everything outside a handler's braces** — a standalone leading `timing off`
+   (or any top-level directive) is not a Tcl body and is simply ignored.
+5. **Warn** on unbalanced braces / no matching `}`. Capture the header text to label output.
+
+---
+
+## Phase 8 delivery & lessons (v0.8.0, tag `phase8` — on-box validated)
+
+> Status: **SHIPPED.** Pure seams validated headless (JavaScriptCore via `osascript`
+> + `test/phase8.js` for on-box Node 6.9.1); the worker tclsh round-trip and the UI
+> validated on-box. The throwaway `proto/disasm-proto.js` was deleted once the
+> worker landed (its exec-wrapper was lifted verbatim into `DisasmWorker.js`).
+
+### Locked decisions (clarifying Q&A this phase)
+| Question | Decision |
+|---|---|
+| `disasmEnabled` read/flip endpoint | **On `DisasmWorker`** (no settings GET/POST existed; smallest surface, self-contained). `GET /disasm`→`{enabled}`, `POST {action:'enable'\|'disable'}` flips it. |
+| Multiple `when` handlers | **Disassemble each body, labeled by its captured header** (e.g. `CLIENT_ACCEPTED priority 300`). |
+| Structured-table view | **Grouped by Command block** (src header + pc/opcode/operands/`# literal` rows); empty/container blocks render header-only. |
+| UI extras | **Cost summary line only.** No paste-box prefill, no localStorage remember-last-input. |
+| Panel layout (follow-up) | **Two columns** — opcode reference left, disassembler right (`.bc-cols` flex, wraps to a stack on narrow panes). |
+
+### Delivered
+- **`opcodes.js` expanded 7 → 34** — seed list + obvious siblings (`push4`, `4`-offset jumps, numeric `eq/neq/lt/gt/le/ge` vs string `streq/strneq`, load/store slots, list/expr ops, `nop`/`dup`/`pop`). New `v85` flag tags 8.5-only opcodes (`startCommand`, `incrScalarStkImm`); new `is85()` accessor; the panel table + the disasm table render a "Tcl 8.5" badge. `streq` (the `eq` operator) and `eq` (numeric `==`) are now distinct rows.
+- **`nodejs/lib/DisasmWorker.js`** (ES5, off the root channel) — `GET /disasm`→`{ok,enabled}`; `POST /disasm {script}`→`{ok,output,warnings}` or `{ok,compileError}` (Tcl compile errors surfaced verbatim, `ok:true` so the browser shows them as feedback); `POST /disasm {action}` flips the flag. `execFile('/usr/bin/tclsh')` as uid 198, body in `RULTRACER_DISASM_BODY` env var fed to a fixed stdin wrapper, 5 s timeout, 1 MiB output cap, 256 KiB input cap. Refuses when the flag is off.
+- **`presentation/js/disasm.js`** (pure `window.RPDisasm`, Node-6.9.1-safe) — `extractHandlers()` (brace-aware `when`-strip, one labeled body per handler, warns on multiple handlers / discarded outside text / unbalanced braces), `matchBrace()`, and `parse()` (raw tclsh → `{meta:{cmds,inst,litObjs,stkDepth}, commands:[{index,src,instructions:[{pc,opcode,operands,comment}]}], warnings}`; tolerates the truncated `Source` header, the `Commands` index, `Exception ranges` blocks, and empty Command blocks).
+- **`presentation/js/disasmview.js`** (`window.DisasmView`) — renders the per-body results in raw (`<pre>`) or structured-table mode; opcodes cross-linked to `RPOpcodes` tooltips, 8.5-isms flagged, compile errors shown per body.
+- **UI** (`index.html` + `app.js` + `api.js`) — the renamed two-column panel: paste box, Disassemble button, raw/table checkbox toggle, abstraction guidance, the 8.5.13≈8.4.6 version label, warnings area, cost summary, and the opt-in **Enable disassembler** control (gated on `GET /disasm`). `app.js` orchestrates `extractHandlers` → one `POST /disasm` per body → `parse` → `DisasmView.render`; the mode toggle re-renders from cached results without re-fetching. `api.js` gained `disasmStatus`/`disasm`/`disasmEnable`.
+- **`settings.js`** — `disasmEnabled: false` in `DEFAULTS`.
+- **Plumbing** — version → `0.8.0` (`configProcessor.js`, `build-rpm.sh`); `DisasmWorker.js` / `disasm.js` / `disasmview.js` added to `%files` (macOS rpm lists every file; staging is wildcard); `disasm.js`/`disasmview.js` script tags in `index.html`. `test/phase8.js` (zero-dep, Node-6.9.1-safe) covers the expanded dictionary + `is85` + when-extraction edge cases + raw-parse; phase7 opcode-meaning assertions updated for the reworded meanings.
+
+### Lessons / decisions
+- **The injection-safety hinge held in production:** body-as-env-var-data + a fixed stdin wrapper + `disassemble` compiling-not-executing means even hostile input is compiled-and-shown, never run — and it runs as uid 198, off the root channel (unlike `tmsh`, `tclsh` has no history-file write problem, so plain `execFile` works).
+- **Same headless constraint as Phases 2–7.** The pure seams (`opcodes.js`/`disasm.js`) are validated under JavaScriptCore + `test/phase8.js`; the worker round-trip and every visual aspect (two-column layout, table tooltips, `op-85` badge, compile-error styling) needed on-box eyes. The `parse()` parser is tested against a representative fixture, not live 8.5.13 output — the most likely place for a future tweak.
+- **No `[hidden]` specificity trap this phase** — Phase 7's global `[hidden]{display:none !important}` already covers the new toggled elements (`#disasm-disabled`/`#disasm-ui`), so setting `display` on them is safe.
+- **Changing an opcode's `meaning` string ripples into the tests** — `tip()` is derived from `meaning()`, so the phase7 `tip('push1')` assertion (not just the `meaning()` ones) had to move when the text was reworded. Single source of truth cuts both ways.

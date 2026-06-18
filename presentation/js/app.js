@@ -696,12 +696,128 @@
       var tr = document.createElement('tr');
       var op = document.createElement('td');
       op.textContent = row.op;
+      if (row.v85) {
+        var tag = document.createElement('span');
+        tag.className = 'op-85';
+        tag.textContent = 'Tcl 8.5';
+        tag.title = 'Tcl 8.5 only — appears in the disassembler but not in the 8.4.6 iRule trace';
+        op.appendChild(document.createTextNode(' '));
+        op.appendChild(tag);
+      }
       var meaning = document.createElement('td');
       meaning.innerHTML = row.meaning;
       tr.appendChild(op);
       tr.appendChild(meaning);
       body.appendChild(tr);
     });
+  }
+
+  // ---- Phase 8: bytecode disassembler --------------------------------------
+  // Opt-in scratchpad in the "Bytecode reference & disassembler" panel. The pure
+  // RPDisasm seam extracts the disassemblable body from a `when {}` wrapper and
+  // parses the raw tclsh output; DisasmView renders it; the worker runs tclsh.
+  var _disasmResults = null; // last results, so the mode toggle re-renders without re-fetching
+
+  function disasmStatusMsg(text, isErr) {
+    var s = $('disasm-status');
+    if (!s) { return; }
+    s.textContent = text || '';
+    s.className = 'disasm-statusmsg' + (isErr ? ' disasm-statusmsg-err' : '');
+  }
+
+  function setDisasmEnabledUI(enabled) {
+    var dis = $('disasm-disabled');
+    var ui = $('disasm-ui');
+    if (dis) { dis.hidden = enabled; }
+    if (ui) { ui.hidden = !enabled; }
+  }
+
+  function refreshDisasmStatus() {
+    if (!window.API || !window.API.disasmStatus) { return; }
+    API.disasmStatus().then(function (s) {
+      setDisasmEnabledUI(s && s.enabled === true);
+    }).catch(function () {
+      setDisasmEnabledUI(false); // older build / error -> show the opt-in prompt
+    });
+  }
+
+  function enableDisasm() {
+    var btn = $('disasm-enable');
+    if (btn) { btn.disabled = true; }
+    API.disasmEnable(true).then(function () {
+      setDisasmEnabledUI(true);
+    }).catch(function (err) {
+      disasmStatusMsg(err.message || 'failed to enable', true);
+    }).then(function () {
+      if (btn) { btn.disabled = false; }
+    });
+  }
+
+  function renderDisasmWarnings(warnings) {
+    var box = $('disasm-warnings');
+    if (!box) { return; }
+    box.innerHTML = '';
+    if (!warnings || !warnings.length) { box.hidden = true; return; }
+    warnings.forEach(function (w) {
+      var p = document.createElement('div');
+      p.className = 'disasm-warn';
+      p.textContent = '⚠ ' + w;
+      box.appendChild(p);
+    });
+    box.hidden = false;
+  }
+
+  function renderDisasmResults() {
+    if (!window.DisasmView) { return; }
+    var mode = $('disasm-table-mode') && $('disasm-table-mode').checked ? 'table' : 'raw';
+    DisasmView.render($('disasm-output'), _disasmResults || [], mode);
+  }
+
+  function runDisasm() {
+    var input = $('disasm-input');
+    var src = input ? input.value : '';
+    if (!src || !/\S/.test(src)) { disasmStatusMsg('enter a Tcl snippet first', true); return; }
+    if (!window.RPDisasm) { disasmStatusMsg('disassembler not loaded', true); return; }
+
+    var extract = RPDisasm.extractHandlers(src);
+    var warnings = extract.warnings.slice();
+    var btn = $('disasm-run');
+    if (btn) { btn.disabled = true; }
+    disasmStatusMsg('disassembling…', false);
+
+    Promise.all(extract.bodies.map(function (b) {
+      return API.disasm(b.body).then(function (resp) {
+        if (resp.compileError) {
+          return { label: b.label, raw: '', parsed: null, compileError: resp.compileError };
+        }
+        var parsed = RPDisasm.parse(resp.output || '');
+        if (parsed.warnings && parsed.warnings.length) {
+          warnings = warnings.concat(parsed.warnings);
+        }
+        return { label: b.label, raw: resp.output || '', parsed: parsed, compileError: null };
+      });
+    })).then(function (results) {
+      _disasmResults = results;
+      renderDisasmWarnings(warnings);
+      renderDisasmResults();
+      disasmStatusMsg('', false);
+    }).catch(function (err) {
+      // A disabled backstop or transport failure — re-check the gate.
+      disasmStatusMsg(err.message || 'disassembly failed', true);
+      refreshDisasmStatus();
+    }).then(function () {
+      if (btn) { btn.disabled = false; }
+    });
+  }
+
+  function wireDisasm() {
+    var enable = $('disasm-enable');
+    if (enable) { enable.addEventListener('click', enableDisasm); }
+    var run = $('disasm-run');
+    if (run) { run.addEventListener('click', runDisasm); }
+    var toggle = $('disasm-table-mode');
+    if (toggle) { toggle.addEventListener('change', renderDisasmResults); }
+    refreshDisasmStatus();
   }
 
   function init() {
@@ -733,6 +849,7 @@
     $('import-file').addEventListener('change', onImportFile);
     renderPeriodPresets();
     renderBytecodeTable();
+    wireDisasm();
     syncCyclesOpts();
     syncLoadSource();
     syncTracePhase();

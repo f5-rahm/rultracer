@@ -8,7 +8,7 @@
 var logger = require('./logger');
 
 var WORKER_URI_PATH = 'shared/iapp/processors/rultracer';
-var VERSION = '0.7.1';
+var VERSION = '0.8.0';
 
 function ConfigProcessor() {
     this.WORKER_URI_PATH = WORKER_URI_PATH;
